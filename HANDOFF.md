@@ -1,4 +1,4 @@
-# Handoff — state of the port as of 2026-08-23 (Phase 1 complete)
+# Handoff — state of the port as of 2026-08-23 (Phase 2 core landed)
 
 Written so this project can be picked up in a fresh session (or by a different person) without
 losing anything that currently lives only in conversation. Everything here is either *not*
@@ -11,7 +11,8 @@ Read order for someone starting cold: [README.md](README.md) → [PORTING_PLAN.m
 
 ## 1. Where the project stands
 
-**Phase 0 and Phase 1 are both complete.** 41 tests pass; nothing is skipped and nothing xfails.
+**Phases 0 and 1 are complete and Phase 2's core has landed.** 83 tests pass; nothing is skipped
+and nothing xfails.
 
 **The Phase 1 milestone is met**: `python -m triton.tools.mkltsa` produces `.ltsa` files that are
 byte-for-byte identical to MATLAB's `calc_ltsa` output on all three fixtures — header, directory,
@@ -23,7 +24,7 @@ values out of a header rather than computing them.
 |---|---|
 | 0 — spec + golden fixtures | **Done.** 12 fixtures, 190 reference artefacts, tests passing |
 | 1 — core library (`io`, `timing`, `dsp`) | **Complete.** 41 passing, 0 skipped, 0 xfail. Milestone met |
-| 2 — session layer | Not started |
+| 2 — session layer | **Core landed.** Milestone met: open, seek, spectrogram tile and LTSA tile, headless |
 | 3 — GUI | Not started |
 | 4 — plugin API + first Remora | Not started |
 | 5 — tools | Not started |
@@ -39,6 +40,7 @@ What exists under `src/triton/`:
 | `dsp.py` | `hanning`, `mkspecgram.m`, `pwelch` + int8, TF interpolation | Done. Agreement is machine precision — see below |
 | `io/ltsa.py` | `read_ltsahead.m`, `read_ltsadata.m` | Done. Data blocks byte-identical on all 3 fixtures |
 | `tools/mkltsa.py` | `get_headers`, `ck_ltsaparams`, `write_ltsahead`, `calc_ltsa` | Done. **Whole-file byte-identical output** |
+| `session.py` | the `PARAMS` global, `control.m`'s update plumbing | Core done. 42 tests in `tests/test_session.py` |
 
 Nothing is skipped and nothing xfails.
 
@@ -234,6 +236,63 @@ Established in conversation, now also recorded in [xwav.md](docs/formats/xwav.md
 60 files in Triton-master carry the CVS marker, including all of `io/` and `prefix.m` in the base
 folder. This rule already decided one case: the v2 header bug in §6 below is in a CVS-marked file,
 so `rdxwavhd` wins.
+
+## 5. Phase 2 notes — the session layer
+
+Milestone met: `tests/test_session.py::test_milestone_open_seek_and_retrieve_both_tiles` opens a
+file, seeks, and returns both a spectrogram tile and an LTSA tile with no GUI toolkit imported.
+
+### What the session is for, in one line each
+
+* **Position is an integer sample index, never a float time.** `AudioState` holds `(segment,
+  offset)`; `time` is a derived property. This is the design rule from timebase.md applied to
+  application state, and it removes the path-dependence documented in `AudioSource.skip_for` —
+  `step(+1)` then `step(-1)` returns to the identical sample, and ten thousand steps accumulate no
+  error. Two tests pin that, including one with a step size that is not a whole number of samples.
+* **Mutation is observable.** `session.subscribe(cb, prefix=...)` gets dotted paths like
+  `"view.nfft"`; `session.batch()` collapses a group of changes into one round so a subscriber
+  never redraws an intermediate state nobody asked for. This is what replaces `control.m`'s ~50
+  hand-rolled update sequences.
+* **Validation happens at assignment.** `view.nfft = -1` raises `ValidationError` there, rather
+  than surfacing inside a plot routine three calls later, which is where MATLAB finds these.
+* **No GUI toolkit is imported**, enforced two ways — a `sys.modules` check and an AST scan of
+  `session.py`'s own imports. The `sys.modules` half is weak on a machine without Qt installed;
+  the AST scan is always meaningful. Phase 3 adapts the callback registry to Qt, not the reverse.
+* **The session adds no arithmetic.** Four equivalence tests assert that a tile obtained through
+  the session is identical to the same data obtained by calling `triton.io` and `triton.dsp`
+  directly. Without those the session could quietly become a second implementation and the parity
+  suite would not notice, because it never goes through the session.
+
+### Three things worth knowing before extending it
+
+**`_max_start_offset` has two bounds and both are load-bearing.** The furthest a window may start
+in a segment is limited by (a) the last *addressable* sample, which is **not** the last sample
+present — a segment's declared end is one sample short of its data (OPEN_DECISIONS §1.5) and
+`segment_containing` tests `t < end` strictly, so the final sample resolves to no segment at all;
+and (b) in the **last** segment only, room for a full window, matching `check_time.m:34-50`'s
+"too late" rule. Earlier segments are deliberately not bounded by (b), because a window there is
+*meant* to spill into the next raw file — that is the splice behaviour analysts rely on. Both
+bounds were found by tests failing, not by reading.
+
+**Clamping is not reversible, and that is correct.** Once a step clamps at either end, how far past
+the end it went is gone, so a matching step back does not return to where it came from. The
+round-trip exactness claim is therefore qualified: it holds while the position stays inside the
+file. An earlier version of that test used 500 steps in a 100,000-sample file, clamped in both
+directions, and passed while demonstrating clamping rather than exactness — it now computes a step
+count that stays inside and asserts `not at_end()` so it cannot silently degrade again.
+
+**`as_params()` is a fresh dict every call, deliberately.** Handing out a live handle would
+reintroduce exactly the thing `PARAMS` is criticised for: the complaint was never that it was
+inspectable, it was that forty functions could mutate it. A test asserts that mutating the returned
+dict does not reach the session. Per the 2026-08-23 decision it is also free to be *clearer* than
+MATLAB rather than bug-compatible — it exposes per-raw-file `dt` (which `rdxwavhd.m` overwrites)
+and real instants rather than shifted datenums, and says so in its docstring.
+
+### Not built yet, deliberately
+
+Undo (the plan lists it as something the design buys, and nothing needs it yet), the Session
+Inspector panel (`walk()` is the data source it will use), the embedded console, and the plugin API
+proper — that is Phase 4, and `session.plugins` is only the namespace it will use.
 
 ## 5a. Phase 1 findings — things that were not in the specs
 
@@ -511,10 +570,9 @@ exists (§6, Resolved).
 Done since the last revision: `git init`; `triton.timebase`; `triton.io.xwav`;
 `triton.io.audio` (`readseg` + `check_time`). Remaining, in order:
 
-1. **Phase 2 — session layer.** `TritonSession`, change signals, `as_params()`, snapshot and
-   inspection. Milestone: open a file, seek to a time, retrieve a spectrogram tile and an LTSA
-   tile, entirely in a test with no GUI. Everything it sits on is now verified, including the
-   parameter derivation, which was the reason to do the writer first.
+1. **Phase 3 — GUI v1**, the long pole. Or, if a smaller next step is wanted, the pieces of
+   Phase 2 listed as not-built-yet above: the Session Inspector is the cheapest of them and
+   `walk()` already supplies its data.
 2. **Close the two writer coverage gaps above** — a two-input LTSA fixture with names of differing
    length. Small, and it is the one place multi-file output is currently unproven.
 3. **Resolve §4** — pick the canonical MATLAB tree, or merge the two. Re-run `dump_reference`

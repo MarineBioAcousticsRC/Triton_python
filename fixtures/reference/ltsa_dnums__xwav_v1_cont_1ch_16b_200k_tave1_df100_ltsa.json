@@ -1,0 +1,10 @@
+{
+  "name": "ltsa_dnums__xwav_v1_cont_1ch_16b_200k_tave1_df100_ltsa",
+  "dtype": "float64",
+  "shape": [
+    4,
+    2
+  ],
+  "order": "F",
+  "matlab_class": "double"
+}

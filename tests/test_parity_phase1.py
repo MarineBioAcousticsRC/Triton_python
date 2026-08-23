@@ -376,12 +376,38 @@ def test_ltsa_header_matches(generated_dir: Path, reference_dir: Path):
         pytest.skip("no LTSA reference; see fixtures/README.md")
     for r in load_reference("ltsa_headers"):
         lt = triton_io.read_ltsa_header(Path(generated_dir) / r["file"])
-        assert lt.version == r["ver"]
-        assert lt.data_start_loc == r["dataStartLoc"]
-        assert lt.n_freq == r["nf"]
-        assert lt.n_raw_total == r["nrftot"]
-        assert list(lt.byte_loc) == np.atleast_1d(r["byteloc"]).tolist()
-        assert list(lt.n_ave) == np.atleast_1d(r["nave"]).tolist()
+
+        # Every scalar the reference dumps, not a chosen few.  This test originally
+        # checked six fields and `ch` was not among them, which let a one-byte offset
+        # error through: v3/v4 store `ch` at 38 and the reader looked at 39, which is
+        # padding.  Padding is zero and zero is a plausible channel number, so the
+        # only symptom was a quietly wrong value.  A field the reference knows and
+        # the test ignores is a field with no oracle.
+        assert lt.version == r["ver"], r["file"]
+        assert lt.data_start_loc == r["dataStartLoc"], r["file"]
+        assert lt.n_freq == r["nf"], r["file"]
+        assert lt.n_raw_total == r["nrftot"], r["file"]
+        assert lt.n_xwav == r["nxwav"], r["file"]
+        assert lt.channel == r["ch"], r["file"]
+        assert lt.nfft == r["nfft"], r["file"]
+        assert lt.fs == r["fs"], r["file"]
+        assert lt.tave == pytest.approx(r["tave"], rel=0, abs=0), r["file"]
+        assert lt.dfreq == pytest.approx(r["dfreq"], rel=0, abs=0), r["file"]
+
+        assert list(lt.byte_loc) == np.atleast_1d(r["byteloc"]).tolist(), r["file"]
+        assert list(lt.n_ave) == np.atleast_1d(r["nave"]).tolist(), r["file"]
+        assert [e.raw_file_id for e in lt.entries] == \
+            np.atleast_1d(r["rfileid"]).tolist(), r["file"]
+        assert [e.filename for e in lt.entries] == \
+            [n.strip() for n in np.atleast_1d(r["fnames"]).tolist()], r["file"]
+
+        # The byte-location chain is derivable from nave and nf (ltsa.md 3.2), so it
+        # can be checked without MATLAB -- and disagreement would mean the directory
+        # is being parsed at the wrong stride.
+        chain = [lt.data_start_loc]
+        for e in lt.entries[:-1]:
+            chain.append(chain[-1] + e.n_ave * lt.n_freq)
+        assert chain == list(lt.byte_loc), f"{r['file']}: byte_loc chain"
 
 
 def test_ltsa_data_block_matches(generated_dir: Path, reference_dir: Path):

@@ -1,0 +1,10 @@
+{
+  "name": "int8_quant__out",
+  "dtype": "int8",
+  "shape": [
+    15,
+    1
+  ],
+  "order": "F",
+  "matlab_class": "int8"
+}

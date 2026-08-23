@@ -1,0 +1,4 @@
+{
+  "note": "MATLAB int8() and fwrite(...,'int8') round half away from zero and saturate",
+  "source": "calc_ltsa.m write path; see ltsa.md 4"
+}

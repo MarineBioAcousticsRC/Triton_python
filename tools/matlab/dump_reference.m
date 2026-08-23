@@ -350,11 +350,37 @@ if want('ltsa')
             tr_dump(opt.out, sprintf('ltsa_dnums__%s',sn), ...
                     [PARAMS.ltsa.dnumStart(:), PARAMS.ltsa.dnumEnd(:)], 'binary');
 
-            % a data block, read exactly the way the plot path reads it
+            % A data block, read the way filepd.m's 'openltsa' path reads it:
+            % read_ltsahead -> init_ltsadata -> read_ltsadata.
+            %
+            % Not init_ltsadata, though it is the real next step, because it also
+            % re-reads the header and validates the display frequency axis
+            % (init_ltsadata.m:14,18) against GUI state this script has no reason
+            % to build. What it contributes that actually matters here is four
+            % assignments -- plotStartRawIndex and plotStartBin at lines 11-12,
+            % plot.dnum and save.dnum at lines 33-37 -- so those are set directly.
+            %
+            % plotStartRawIndex and plotStartBin are needed *before* the read, not
+            % after. read_ltsadata does derive them from plot.dnum, but only after
+            % check_ltsa_time has already run at line 11 and read them
+            % (check_ltsa_time.m:13-14). Omitting them is not a latent problem, it
+            % is an immediate error.
+            %
+            % tseg.step matters and used to not. Triton_remoras re-enabled
+            % check_ltsa_time at read_ltsadata.m:11 -- it had been commented out
+            % by the PR #116 revert, which is what issue #129 turned out to be --
+            % and check_ltsa_time.m:11 reads PARAMS.ltsa.tseg.step. Every real
+            % caller already sets it (initparams.m:131, mk_ltsa.m:50,
+            % sm_mk_ltsa.m:46); only a hand-built PARAMS like this one did not, so
+            % this section threw "Unrecognized field name step" against a fixed
+            % Triton while working against a broken one.
+            PARAMS.ltsa.plotStartRawIndex = 1;  % init_ltsadata.m:11
+            PARAMS.ltsa.plotStartBin      = 1;  % init_ltsadata.m:12
             PARAMS.ltsa.plot.dnum  = PARAMS.ltsa.start.dnum;
+            PARAMS.ltsa.save.dnum  = PARAMS.ltsa.start.dnum;
+            PARAMS.ltsa.tseg.step  = -1;        % window steps by its own width
             PARAMS.ltsa.tseg.hr    = 1/60;      % 1 minute
             PARAMS.ltsa.tseg.sec   = 60;
-            PARAMS.ltsa.save.dnum  = PARAMS.ltsa.start.dnum;
             read_ltsadata;
             tr_dump(opt.out, sprintf('ltsa_block__%s',sn), PARAMS.ltsa.pwr, 'binary');
             tr_dump(opt.out, sprintf('ltsa_block__%s__meta',sn), struct( ...

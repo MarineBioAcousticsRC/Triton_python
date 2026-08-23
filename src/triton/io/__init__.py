@@ -21,6 +21,7 @@ from .audio import (
     XwavSource,
     open_audio,
 )
+from .ltsa import LtsaEntry, LtsaHeader, LtsaSource, open_ltsa, read_ltsa_header
 from .xwav import RawFile, XwavHeader, read_xwav_header
 
 __all__ = [
@@ -32,6 +33,11 @@ __all__ = [
     "Boundary",
     "TimeNotInData",
     "AmbiguousTime",
+    "open_ltsa",
+    "read_ltsa_header",
+    "LtsaSource",
+    "LtsaHeader",
+    "LtsaEntry",
     "read_xwav_header",
     "XwavHeader",
     "RawFile",

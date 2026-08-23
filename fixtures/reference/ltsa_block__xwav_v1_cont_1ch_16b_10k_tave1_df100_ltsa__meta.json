@@ -1,0 +1,7 @@
+{
+  "file": "xwav_v1_cont_1ch_16b_10k__tave1_df100.ltsa",
+  "tseg_hr": 0.0033333333333333335,
+  "plotStartRawIndex": 1,
+  "plotStartBin": 1,
+  "source": "read_ltsadata.m"
+}

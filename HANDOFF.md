@@ -1,4 +1,4 @@
-# Handoff — state of the port as of 2026-08-23
+# Handoff — state of the port as of 2026-08-23 (revised, LTSA)
 
 Written so this project can be picked up in a fresh session (or by a different person) without
 losing anything that currently lives only in conversation. Everything here is either *not*
@@ -11,14 +11,15 @@ Read order for someone starting cold: [README.md](README.md) → [PORTING_PLAN.m
 
 ## 1. Where the project stands
 
-**Phase 0 is complete and verified**, with two carve-outs listed in §6. **Phase 1's code is
-complete**: timebase, x.wav reading, and spectra. The only thing left in Phase 1 is LTSA parity,
-which is blocked on fixtures that have never been built (§6.1) rather than on code.
+**Phase 0 is complete.** **Phase 1's read side is complete**: timebase, x.wav, spectra, and LTSA.
+The LTSA fixtures have now been built and the parity suite has **no skips left** — 40 passing and 1
+xfail, that xfail being the Phase 1 milestone itself (a Python LTSA *writer* whose output is
+byte-identical to MATLAB's). Everything Triton reads, this reads, and provably identically.
 
 | Phase | Status |
 |---|---|
 | 0 — spec + golden fixtures | **Done.** 12 fixtures, 190 reference artefacts, tests passing |
-| 1 — core library (`io`, `timing`, `dsp`) | **Code complete.** 37 passing, 4 skipped; the 4 skips are LTSA parity, blocked on §6.1 |
+| 1 — core library (`io`, `timing`, `dsp`) | **Read side complete.** 40 passing, 0 skipped, 1 xfail (the writer milestone) |
 | 2 — session layer | Not started |
 | 3 — GUI | Not started |
 | 4 — plugin API + first Remora | Not started |
@@ -33,8 +34,10 @@ What exists under `src/triton/`:
 | `io/xwav.py` | `rdxwavhd.m` | Done, including v2, which MATLAB's `io/` readers cannot do |
 | `io/audio.py` | `readseg.m`, `check_time.m` | Done. Byte-exact against all 27 reference cases |
 | `dsp.py` | `hanning`, `mkspecgram.m`, `pwelch` + int8, TF interpolation | Done. Agreement is machine precision — see below |
+| `io/ltsa.py` | `read_ltsahead.m`, `read_ltsadata.m` | Done. Data blocks byte-identical on all 3 fixtures |
 
-All 4 remaining skips are LTSA parity, waiting on §6.1.
+Nothing is skipped. The single xfail is `test_python_mkltsa_is_byte_identical`, which needs
+`triton.tools.mkltsa` — the LTSA *writer*, and the whole point of Phase 1.
 
 Measured agreement for `dsp`, because "it passes" understates it and a future regression should
 have a number to fall short of:
@@ -284,6 +287,33 @@ immediately. **Do not collapse these back into one fuzzy-tolerance test.**
 by (`rdxwavhd.m:160`, `readseg.m:129`). On the `fakefs` fixture these are genuinely different
 numbers and using one for the other shifts every delimiter. Both are reproduced as written.
 
+### A field the reference knows and the test ignores is a field with no oracle
+
+`test_ltsa_header_matches` originally asserted six of the fourteen fields the reference dumps.
+`ch` was not among them, and the LTSA reader read it from the wrong offset — v3/v4 store it at 38
+and the reader looked at 39. Offset 39 is padding, padding is zero, and zero is a perfectly
+plausible channel number, so the only symptom was a quietly wrong value on every v4 file. The
+test passed.
+
+It surfaced only because a hand-written sanity script printed the field next to the value the
+fixture was built with (`ch = 1`) and they disagreed. Two changes followed:
+
+* the test now asserts **every** scalar the reference dumps, plus `rfileid` and `fnames` per entry,
+  plus that the `byte_loc` chain reproduces from `nave × nf` (ltsa.md 3.2) — which is checkable
+  without MATLAB and would catch a wrong directory stride;
+* `io/ltsa.py` has a `_check_layout()` that runs at import and asserts the header and entry
+  geometry of all four versions sums to its declared size, so an offset edit that breaks the
+  arithmetic fails loudly instead of returning zeros.
+
+The general form is worth keeping in mind for the remaining phases: **a dumped reference field
+that no assertion touches is not coverage.** Prefer asserting the whole record.
+
+### The int8 tie-breaking rule is now verified, not assumed
+
+The probe added to `dump_reference.m` has been run. MATLAB's `int8()` output on the 15 probe values
+matches `to_int8_db` exactly, and numpy's default `round()` would have differed on 4 of them
+(−0.5, 0.5, 2.5, 126.5). That gap is closed with evidence.
+
 ### check_time.m conditions 2b and 3 do not warn, they crash
 
 `check_time.m` leaves `PARAMS.raw.currentIndex` empty when the time is past the last raw file, and
@@ -296,13 +326,23 @@ place that knows why, and the message says which raw files and what to do.
 
 ### Blocking nothing, but must be done to finish Phase 0
 
-1. **LTSA fixtures are not built.** [`tools/matlab/make_ltsa_fixture.m`](tools/matlab/make_ltsa_fixture.m)
-   is written and drives the real MATLAB pipeline, but Triton-master's `write_ltsahead` guard bug
-   forces one Save dialog per file, which cannot be done from `matlab -batch`. Three options, best
-   first:
-   - point the script at `Triton_remoras`'s already-fixed `write_ltsahead` and run it headless;
-   - apply the one-line fix to Triton-master and run it headless;
-   - run it in interactive MATLAB and click through three dialogs.
+1. ~~**LTSA fixtures are not built.**~~ **Done, 2026-08-23.** The first of the three options
+   worked: pointed `make_ltsa_fixture` at `Triton_remoras`, whose `write_ltsahead` already tests
+   `~isfield(PARAMS.ltsa,'outfile')` rather than the broken `exist('PARAMS.ltsa.outfile','var')`,
+   and it ran headless with no dialogs. Three v4 LTSAs built, `dump_reference('sections',
+   {'ltsa','dsp'})` captured, all four previously-skipped tests now pass.
+
+   Two things had to be fixed in `dump_reference.m` first, both consequences of the MATLAB side
+   having improved since Phase 0 was written:
+   - Its `ltsa` section hand-builds `PARAMS` and called `read_ltsadata` directly. That worked when
+     `check_ltsa_time` was commented out at `read_ltsadata.m:11` — which is what issue #129 turned
+     out to be — and threw `Unrecognized field name "step"` once it was restored. It now sets
+     `tseg.step`, `plotStartRawIndex` and `plotStartBin`, which is what `init_ltsadata` would have
+     contributed. **Note the ordering trap:** `read_ltsadata` does derive `plotStartRawIndex`
+     itself, but only *after* `check_ltsa_time` has already read it, so omitting it is an immediate
+     error rather than a latent one.
+   - No real caller was affected — `initparams.m:131`, `mk_ltsa.m:50` and `sm_mk_ltsa.m:46` all set
+     `tseg.step` — so this was fixture tooling, not a regression. Checked before assuming.
 
    Then `dump_reference('sections',{'ltsa'})`. Until this happens,
    `test_ltsa_reference_present_or_explained` and the LTSA parity tests skip.
@@ -348,9 +388,6 @@ and worth closing when MATLAB is next in front of someone.
    duty fixture a 0.5 s window opened at +2.25 s gives 2500 real samples then 2500 NaN, the switch
    falling exactly where raw file 0's 2.5 s of data ends, and the real samples are identical to the
    spliced mode's.
-
-4. **The int8 rounding tie is checked against documented behaviour, not a dump.** Covered above;
-   the probe is queued in `dump_reference.m` and will verify itself on the next `dsp` run.
 
 The 24-bit decode path is also unverified, but that is expected and harmless — no 24-bit x.wav
 exists (§6, Resolved).
@@ -421,9 +458,13 @@ exists (§6, Resolved).
 Done since the last revision: `git init`; `triton.timebase`; `triton.io.xwav`;
 `triton.io.audio` (`readseg` + `check_time`). Remaining, in order:
 
-1. **Build the LTSA fixtures** (§6.1) and re-run `dump_reference('sections',{'ltsa','dsp'})` —
-   `dsp` as well, to pick up the new int8 tie-breaking probe. This unblocks the last 4 skips and
-   is the only thing standing between here and the Phase 1 milestone.
+1. **`triton.tools.mkltsa`** — the LTSA writer, and the Phase 1 milestone. Everything it needs
+   now exists and is verified: `dsp.welch_db` and `dsp.to_int8_db` for the values,
+   `io/ltsa.py`'s `_layout` for the byte geometry, `io/audio.py` for reading the source. The
+   parameter derivation is in ltsa.md 5.2 (`nfft = floor(fs/dfreq)`, `cfact = tave*fs/nfft`,
+   `nave = ceil(Nsamp/(nfft*cfact))`) and the `tave` clamp is real — the 200 kHz fixture hit it
+   and came out at 0.25 s. `test_python_mkltsa_is_byte_identical` is the target; drop its xfail
+   when it passes.
 2. **Resolve §4** — pick the canonical MATLAB tree, or merge the two. Re-run `dump_reference`
    afterwards if anything in the pipeline changed.
 3. **Close the parity coverage gaps in §6** while MATLAB is open anyway; the duty-cycle gap case

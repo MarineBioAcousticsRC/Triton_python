@@ -1,0 +1,116 @@
+[
+  {
+    "file": "xwav_v1_cont_1ch_16b_10k__tave1_df100.ltsa",
+    "ver": 4,
+    "dirStartLoc": 65,
+    "dataStartLoc": 10880,
+    "tave": 1,
+    "dfreq": 100,
+    "fs": 10000,
+    "nfft": 100,
+    "nf": 51,
+    "nrftot": 4,
+    "nxwav": 1,
+    "ch": 1,
+    "byteloc": [
+      10880,
+      11033,
+      11186,
+      11339
+    ],
+    "nave": [
+      3,
+      3,
+      3,
+      3
+    ],
+    "rfileid": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "fnames": [
+      "xwav_v1_cont_1ch_16b_10k.x.wav",
+      "xwav_v1_cont_1ch_16b_10k.x.wav",
+      "xwav_v1_cont_1ch_16b_10k.x.wav",
+      "xwav_v1_cont_1ch_16b_10k.x.wav"
+    ]
+  },
+  {
+    "file": "xwav_v1_cont_1ch_16b_200k__tave1_df100.ltsa",
+    "ver": 4,
+    "dirStartLoc": 65,
+    "dataStartLoc": 10880,
+    "tave": 0.25,
+    "dfreq": 100,
+    "fs": 200000,
+    "nfft": 2000,
+    "nf": 1001,
+    "nrftot": 4,
+    "nxwav": 1,
+    "ch": 1,
+    "byteloc": [
+      10880,
+      11881,
+      12882,
+      13883
+    ],
+    "nave": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "rfileid": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "fnames": [
+      "xwav_v1_cont_1ch_16b_200k.x.wav",
+      "xwav_v1_cont_1ch_16b_200k.x.wav",
+      "xwav_v1_cont_1ch_16b_200k.x.wav",
+      "xwav_v1_cont_1ch_16b_200k.x.wav"
+    ]
+  },
+  {
+    "file": "xwav_v1_duty_1ch_16b_10k__tave1_df100.ltsa",
+    "ver": 4,
+    "dirStartLoc": 65,
+    "dataStartLoc": 10880,
+    "tave": 1,
+    "dfreq": 100,
+    "fs": 10000,
+    "nfft": 100,
+    "nf": 51,
+    "nrftot": 4,
+    "nxwav": 1,
+    "ch": 1,
+    "byteloc": [
+      10880,
+      11033,
+      11186,
+      11339
+    ],
+    "nave": [
+      3,
+      3,
+      3,
+      3
+    ],
+    "rfileid": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "fnames": [
+      "xwav_v1_duty_1ch_16b_10k.x.wav",
+      "xwav_v1_duty_1ch_16b_10k.x.wav",
+      "xwav_v1_duty_1ch_16b_10k.x.wav",
+      "xwav_v1_duty_1ch_16b_10k.x.wav"
+    ]
+  }
+]

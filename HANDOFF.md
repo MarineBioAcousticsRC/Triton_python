@@ -1,4 +1,4 @@
-# Handoff — state of the port as of 2026-08-23 (revised, LTSA)
+# Handoff — state of the port as of 2026-08-23 (Phase 1 complete)
 
 Written so this project can be picked up in a fresh session (or by a different person) without
 losing anything that currently lives only in conversation. Everything here is either *not*
@@ -11,15 +11,18 @@ Read order for someone starting cold: [README.md](README.md) → [PORTING_PLAN.m
 
 ## 1. Where the project stands
 
-**Phase 0 is complete.** **Phase 1's read side is complete**: timebase, x.wav, spectra, and LTSA.
-The LTSA fixtures have now been built and the parity suite has **no skips left** — 40 passing and 1
-xfail, that xfail being the Phase 1 milestone itself (a Python LTSA *writer* whose output is
-byte-identical to MATLAB's). Everything Triton reads, this reads, and provably identically.
+**Phase 0 and Phase 1 are both complete.** 41 tests pass; nothing is skipped and nothing xfails.
+
+**The Phase 1 milestone is met**: `python -m triton.tools.mkltsa` produces `.ltsa` files that are
+byte-for-byte identical to MATLAB's `calc_ltsa` output on all three fixtures — header, directory,
+spare-slot zero fill, and every quantised spectrum. That is the unambiguous proof the plan asked
+for, and it is the only test that covers the parameter *derivation*; every other test reads those
+values out of a header rather than computing them.
 
 | Phase | Status |
 |---|---|
 | 0 — spec + golden fixtures | **Done.** 12 fixtures, 190 reference artefacts, tests passing |
-| 1 — core library (`io`, `timing`, `dsp`) | **Read side complete.** 40 passing, 0 skipped, 1 xfail (the writer milestone) |
+| 1 — core library (`io`, `timing`, `dsp`) | **Complete.** 41 passing, 0 skipped, 0 xfail. Milestone met |
 | 2 — session layer | Not started |
 | 3 — GUI | Not started |
 | 4 — plugin API + first Remora | Not started |
@@ -35,9 +38,44 @@ What exists under `src/triton/`:
 | `io/audio.py` | `readseg.m`, `check_time.m` | Done. Byte-exact against all 27 reference cases |
 | `dsp.py` | `hanning`, `mkspecgram.m`, `pwelch` + int8, TF interpolation | Done. Agreement is machine precision — see below |
 | `io/ltsa.py` | `read_ltsahead.m`, `read_ltsadata.m` | Done. Data blocks byte-identical on all 3 fixtures |
+| `tools/mkltsa.py` | `get_headers`, `ck_ltsaparams`, `write_ltsahead`, `calc_ltsa` | Done. **Whole-file byte-identical output** |
 
-Nothing is skipped. The single xfail is `test_python_mkltsa_is_byte_identical`, which needs
-`triton.tools.mkltsa` — the LTSA *writer*, and the whole point of Phase 1.
+Nothing is skipped and nothing xfails.
+
+### What the writer turned up
+
+Four MATLAB behaviours had to be reproduced rather than fixed, because existing LTSAs were
+produced with them and a reader has to agree with the writer. All four are marked
+`BUG-COMPATIBLE` at their sites in `tools/mkltsa.py`.
+
+1. **The last spectral average of a raw file re-reads earlier data.** `calc_ltsa.m:99` advances the
+   input pointer by *this* average's sample count, but the distance to move is the *previous*
+   average's length. Identical for every average except the last one of a raw file that does not
+   divide evenly, where the short length under-advances and the final average overlaps the one
+   before it. It never reads outside the raw file, so nothing looks corrupt — the last time bin of
+   each raw file simply is not the data it claims to be. **This is live in the archive**: the
+   10 kHz fixtures hit it (`nave` 3 against an exact 2.5), so any LTSA whose `tave` does not divide
+   its raw files evenly has this in every raw file's last bin. Worth deciding separately whether to
+   fix it in MATLAB; doing so would change LTSA bytes and so needs its own conversation.
+2. **`fs` comes from the `fmt` chunk, not the raw-file table** (ltsa.md 5.1, `ck_ltsaparams.m:20`),
+   and creation then *aborts* if any raw file disagrees. The `fakefs` fixture is refused here and
+   read happily by the display path — which is correct, and the error message says so.
+3. **100 spare directory slots are reserved** (`write_ltsahead.m:41`), so a 612-byte-of-spectra
+   LTSA is 11,492 bytes. Presumably for appending, which nothing does.
+4. **The filename field is padded twice** — space-padded to the longest input name by MATLAB's char
+   matrix, then NUL-padded to 80 (`get_headers.m:113`). Only observable with inputs of differing
+   name lengths, which no fixture has; see the coverage note below.
+
+Two test-side lessons, both the same shape as the `ch` offset bug:
+
+* `test_python_mkltsa_is_byte_identical` was passing `r["fnames"]` straight into the input list.
+  That field is dumped **per raw file**, so a single four-raw-file x.wav appeared four times and
+  the test built an LTSA of four copies of the same file. It now deduplicates, and reports the
+  first differing byte offset on failure instead of dumping two 11 kB blobs — the offset alone
+  usually names the field.
+* Every derived value matched on the first run once the input list was right. The failure was
+  entirely in the harness, which is worth remembering: when a byte-identical test fails at a low
+  offset, suspect the inputs before the arithmetic.
 
 Measured agreement for `dsp`, because "it passes" understates it and a future regression should
 have a number to fall short of:
@@ -389,6 +427,16 @@ and worth closing when MATLAB is next in front of someone.
    falling exactly where raw file 0's 2.5 s of data ends, and the real samples are identical to the
    spliced mode's.
 
+4. **The writer is only checked on single-input LTSAs.** All three fixtures are one x.wav each, so
+   two things are unexercised: the filename space-padding described above (which needs inputs of
+   differing name lengths), and the `byteloc` chain across a file boundary as opposed to across raw
+   files within one file. Both are cheap to close — build a fourth fixture from two of the existing
+   x.wavs, whose names differ in length, and re-dump. Worth doing before anyone relies on
+   multi-file output.
+5. **`split_inputs` has no end-to-end test.** The chunking arithmetic is trivial and tested by
+   inspection, but nothing builds two LTSAs from one oversized list. It cannot be tested honestly
+   without 65,536 input files, so a smaller `max_files` should be injected instead.
+
 The 24-bit decode path is also unverified, but that is expected and harmless — no 24-bit x.wav
 exists (§6, Resolved).
 
@@ -458,14 +506,13 @@ exists (§6, Resolved).
 Done since the last revision: `git init`; `triton.timebase`; `triton.io.xwav`;
 `triton.io.audio` (`readseg` + `check_time`). Remaining, in order:
 
-1. **`triton.tools.mkltsa`** — the LTSA writer, and the Phase 1 milestone. Everything it needs
-   now exists and is verified: `dsp.welch_db` and `dsp.to_int8_db` for the values,
-   `io/ltsa.py`'s `_layout` for the byte geometry, `io/audio.py` for reading the source. The
-   parameter derivation is in ltsa.md 5.2 (`nfft = floor(fs/dfreq)`, `cfact = tave*fs/nfft`,
-   `nave = ceil(Nsamp/(nfft*cfact))`) and the `tave` clamp is real — the 200 kHz fixture hit it
-   and came out at 0.25 s. `test_python_mkltsa_is_byte_identical` is the target; drop its xfail
-   when it passes.
-2. **Resolve §4** — pick the canonical MATLAB tree, or merge the two. Re-run `dump_reference`
+1. **Phase 2 — session layer.** `TritonSession`, change signals, `as_params()`, snapshot and
+   inspection. Milestone: open a file, seek to a time, retrieve a spectrogram tile and an LTSA
+   tile, entirely in a test with no GUI. Everything it sits on is now verified, including the
+   parameter derivation, which was the reason to do the writer first.
+2. **Close the two writer coverage gaps above** — a two-input LTSA fixture with names of differing
+   length. Small, and it is the one place multi-file output is currently unproven.
+3. **Resolve §4** — pick the canonical MATLAB tree, or merge the two. Re-run `dump_reference`
    afterwards if anything in the pipeline changed.
 3. **Close the parity coverage gaps in §6** while MATLAB is open anyway; the duty-cycle gap case
    is the one worth the effort.

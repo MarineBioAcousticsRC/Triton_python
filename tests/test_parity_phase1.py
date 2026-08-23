@@ -422,11 +422,22 @@ def test_ltsa_data_block_matches(generated_dir: Path, reference_dir: Path):
         np.testing.assert_array_equal(got, expected)
 
 
-@pytest.mark.xfail(reason="Phase 1 milestone: not expected to pass until mkltsa is complete")
 def test_python_mkltsa_is_byte_identical(tmp_path: Path, generated_dir: Path,
                                          reference_dir: Path):
-    """THE Phase 1 milestone.  A Python-generated .ltsa must be byte-for-byte identical to the
-    one MATLAB's calc_ltsa produced from the same inputs and parameters."""
+    """THE Phase 1 milestone, and it passes.
+
+    A Python-generated .ltsa is byte-for-byte identical to the one MATLAB's calc_ltsa
+    produced from the same inputs and parameters -- header, directory, spare-slot zero
+    fill, and every quantised spectrum.
+
+    This is the strongest test in the suite by some distance.  It is the only one that
+    exercises the parameter *derivation* (blksz, the tave clamp, nfft, cfact, nave):
+    every other test reads those values out of a header instead of computing them.  It
+    also depends on the window definition, the PSD normalisation and the int8 quantiser
+    being simultaneously right, with no tolerance to hide behind.
+
+    If it breaks, suspect the derivation before the arithmetic -- the arithmetic has its
+    own tests and the derivation does not."""
     if not (Path(reference_dir) / "ltsa_headers.json").exists():
         pytest.skip("no LTSA reference; see fixtures/README.md")
     from triton.tools import mkltsa
@@ -434,11 +445,34 @@ def test_python_mkltsa_is_byte_identical(tmp_path: Path, generated_dir: Path,
     for r in load_reference("ltsa_headers"):
         matlab_bytes = (Path(generated_dir) / r["file"]).read_bytes()
         out = tmp_path / r["file"]
+
+        # `fnames` is dumped from PARAMS.ltsahd.fname, which get_headers.m:113 fills in
+        # **per raw file** -- so a single four-raw-file x.wav appears four times.  The
+        # input list is the unique names in order; passing the raw list would build an
+        # LTSA of four copies of the same file, which is a different (valid) LTSA.
+        names, seen = [], set()
+        for n in np.atleast_1d(r["fnames"]).tolist():
+            n = n.strip()
+            if n not in seen:
+                seen.add(n)
+                names.append(n)
+
         mkltsa.build(
-            inputs=[Path(generated_dir) / n.strip() for n in r["fnames"]],
+            inputs=[Path(generated_dir) / n for n in names],
             out=out, tave=r["tave"], dfreq=r["dfreq"], channel=r["ch"],
         )
-        assert out.read_bytes() == matlab_bytes, r["file"]
+        got = out.read_bytes()
+        if got != matlab_bytes:
+            # Locate the disagreement rather than dumping two 11 kB blobs, since the
+            # offset alone usually names the field (ltsa.md 2 and 3).
+            n = min(len(got), len(matlab_bytes))
+            first = next((i for i in range(n) if got[i] != matlab_bytes[i]), n)
+            raise AssertionError(
+                f"{r['file']}: sizes {len(got)} vs {len(matlab_bytes)}, first "
+                f"difference at byte {first}\n"
+                f"  ours   {got[max(0, first - 8):first + 16].hex(' ')}\n"
+                f"  MATLAB {matlab_bytes[max(0, first - 8):first + 16].hex(' ')}"
+            )
 
 
 def _safe(name: str) -> str:

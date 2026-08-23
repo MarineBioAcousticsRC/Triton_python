@@ -292,7 +292,15 @@ def test_spectrogram_matches_mkspecgram(generated_dir: Path, reference_dir: Path
         )
         np.testing.assert_allclose(got.f, f.ravel(), rtol=0, atol=1e-12, err_msg=stem)
         np.testing.assert_allclose(got.t, t.ravel(), rtol=0, atol=1e-12, err_msg=stem)
-        np.testing.assert_allclose(got.db, pwr, rtol=1e-9, atol=0, err_msg=stem)
+        # Relative *plus* a small absolute floor, and the floor is the point.  A dB
+        # value can legitimately pass through zero -- specgram_nfft1000_ol50 has a bin
+        # at -3.25e-4 dB -- and a pure relative bound on a near-zero value measures
+        # nothing but its own noise.  That bin alone accounted for a 2.2e-10 relative
+        # error while its absolute error was 7.3e-14 dB.  Measured agreement across
+        # all four cases is 7.3e-12 dB absolute, and 3.2e-13 relative once bins below
+        # 1 dB are excluded, so this is not slack: it is the same tightness expressed
+        # in a form a zero crossing cannot trip.
+        np.testing.assert_allclose(got.db, pwr, rtol=1e-9, atol=1e-9, err_msg=stem)
 
 
 def test_pwelch_and_int8_quantisation(reference_dir: Path):
@@ -309,6 +317,46 @@ def test_pwelch_and_int8_quantisation(reference_dir: Path):
                                   fs=meta["fs"], nfft=meta["nfft"], noverlap=0)
         np.testing.assert_allclose(got, db.ravel(), rtol=1e-9, atol=0, err_msg=stem)
         np.testing.assert_array_equal(triton_dsp.to_int8_db(got), q8.ravel().astype(np.int8))
+
+
+def test_int8_quantisation_ties_and_saturation(reference_dir: Path):
+    """The rounding rule at a .5 tie, which no pwelch fixture reaches.
+
+    Measured: the closest any pwelch reference value comes to a tie is 0.0054, so
+    `test_pwelch_and_int8_quantisation` passing tells us nothing about tie-breaking --
+    and tie-breaking is the one part of `to_int8_db` that needed custom code.  MATLAB's
+    `int8()` and `fwrite(...,'int8')` round half **away from zero**; numpy's `round()`
+    rounds half to **even**, so they disagree on 0.5, 2.5 and 126.5.  Out-of-range
+    values saturate rather than wrapping (ltsa.md 4).
+
+    Prefers a MATLAB dump when one exists.  Until `dump_reference('sections',{'dsp'})`
+    is next run, it checks against the documented rule instead, which is weaker
+    evidence but still catches the numpy default creeping back in.
+    """
+    triton_dsp = pytest.importorskip("triton.dsp")
+
+    # Always check the rule, whether or not a MATLAB dump exists.  load_reference_bin
+    # skips the whole test when a dump is missing, which would be exactly the wrong
+    # behaviour here: this test's value is that it runs *before* the dump is produced.
+    probe = np.array([-200.5, -128.5, -127.5, -1.5, -0.5, -0.4, 0.0, 0.4, 0.5, 1.5,
+                      2.5, 126.5, 127.4, 127.5, 200.5])
+    expected = np.array([-128, -128, -128, -2, -1, 0, 0, 0, 1, 2,
+                         3, 127, 127, 127, 127], dtype=np.int8)
+    np.testing.assert_array_equal(triton_dsp.to_int8_db(probe), expected)
+
+    # Guard the actual trap: numpy's default rounding gets several of these wrong, so
+    # if this ever stops being true the probe has lost its point.
+    assert not np.array_equal(
+        np.clip(np.round(probe), -128, 127).astype(np.int8), expected
+    ), "probe no longer distinguishes half-away-from-zero from numpy's half-to-even"
+
+    # Then, if MATLAB has since confirmed it, check against that instead of the doc.
+    if (reference_dir / "int8_quant__in.bin").exists():
+        ref_in, _ = load_reference_bin("int8_quant__in")
+        ref_out, _ = load_reference_bin("int8_quant__out")
+        np.testing.assert_array_equal(
+            triton_dsp.to_int8_db(ref_in.ravel()), ref_out.ravel().astype(np.int8)
+        )
 
 
 def test_transfer_function_interpolation(reference_dir: Path):

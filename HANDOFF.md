@@ -11,13 +11,14 @@ Read order for someone starting cold: [README.md](README.md) → [PORTING_PLAN.m
 
 ## 1. Where the project stands
 
-**Phase 0 is complete and verified**, with two carve-outs listed in §6. **Phase 1 is underway**:
-the timebase and the whole x.wav read path are done and passing; `triton.dsp` is next.
+**Phase 0 is complete and verified**, with two carve-outs listed in §6. **Phase 1's code is
+complete**: timebase, x.wav reading, and spectra. The only thing left in Phase 1 is LTSA parity,
+which is blocked on fixtures that have never been built (§6.1) rather than on code.
 
 | Phase | Status |
 |---|---|
 | 0 — spec + golden fixtures | **Done.** 12 fixtures, 190 reference artefacts, tests passing |
-| 1 — core library (`io`, `timing`, `dsp`) | **In progress.** `timebase` + `io` done (32 passing, 8 skipped); `dsp` not started |
+| 1 — core library (`io`, `timing`, `dsp`) | **Code complete.** 37 passing, 4 skipped; the 4 skips are LTSA parity, blocked on §6.1 |
 | 2 — session layer | Not started |
 | 3 — GUI | Not started |
 | 4 — plugin API + first Remora | Not started |
@@ -31,8 +32,34 @@ What exists under `src/triton/`:
 | `timebase.py` | the 2000-year datenum shift, `wavname2dnum.m` | Done. All 6 filename patterns parse |
 | `io/xwav.py` | `rdxwavhd.m` | Done, including v2, which MATLAB's `io/` readers cannot do |
 | `io/audio.py` | `readseg.m`, `check_time.m` | Done. Byte-exact against all 27 reference cases |
+| `dsp.py` | `hanning`, `mkspecgram.m`, `pwelch` + int8, TF interpolation | Done. Agreement is machine precision — see below |
 
-The 8 skipped tests are `triton.dsp` (4) and the LTSA fixtures that were never built (4, §6.1).
+All 4 remaining skips are LTSA parity, waiting on §6.1.
+
+Measured agreement for `dsp`, because "it passes" understates it and a future regression should
+have a number to fall short of:
+
+| quantity | agreement | test tolerance |
+|---|---|---|
+| `hanning` | 6e-16 absolute | 1e-15 |
+| spectrogram dB | **7.3e-12 dB absolute**, 3.2e-13 relative | 1e-9 |
+| spectrogram `f`, `t` | exact (0.0) | 1e-12 |
+| `pwelch` dB | 9e-16 relative | 1e-9 |
+| int8 quantisation | exact, all 3 cases | exact |
+| TF interpolation | 2e-16 relative | 1e-12 |
+
+Two things about `dsp` that took measuring rather than reading:
+
+* **State the spectrogram tolerance in absolute dB, not relative.** A dB value passes through zero
+  legitimately — `specgram_nfft1000_ol50` has a bin at −3.25e−4 dB — and a pure relative bound
+  there measures its own noise. That one bin produced a 2.2e−10 relative error while its absolute
+  error was 7.3e−14 dB, making the test look 4.5× from failing when it was eleven orders off. The
+  assertion now carries both a relative bound and an absolute floor.
+* **No pwelch fixture lands on a rounding tie**, so the one part of `to_int8_db` that needed custom
+  code was passing untested. Closest approach across all three cases is 0.0054. MATLAB's `int8()`
+  rounds half *away from zero*; numpy's `round()` rounds half to *even*, so they disagree on 0.5,
+  2.5 and 126.5. There is now a probe vector in `dump_reference.m` and a test that checks the rule
+  against documented behaviour immediately and upgrades itself to the MATLAB dump once one exists.
 
 ## 2. Decisions that are settled
 
@@ -322,6 +349,9 @@ and worth closing when MATLAB is next in front of someone.
    falling exactly where raw file 0's 2.5 s of data ends, and the real samples are identical to the
    spliced mode's.
 
+4. **The int8 rounding tie is checked against documented behaviour, not a dump.** Covered above;
+   the probe is queued in `dump_reference.m` and will verify itself on the next `dsp` run.
+
 The 24-bit decode path is also unverified, but that is expected and harmless — no 24-bit x.wav
 exists (§6, Resolved).
 
@@ -391,17 +421,15 @@ exists (§6, Resolved).
 Done since the last revision: `git init`; `triton.timebase`; `triton.io.xwav`;
 `triton.io.audio` (`readseg` + `check_time`). Remaining, in order:
 
-1. **`triton.dsp`** — `hanning`, then the spectrogram against `mkspecgram`. Four written tests
-   turn on the moment the module imports, so start there and let them steer. Watch the window
-   definition: a fractional-dB disagreement is the documented symptom (ltsa.md 5.1).
-2. **Build the LTSA fixtures** (§6.1) and re-run `dump_reference('sections',{'ltsa'})`. This
-   unblocks the last 4 skips and is the gate on the Phase 1 milestone.
-3. **Resolve §4** — pick the canonical MATLAB tree, or merge the two. Re-run `dump_reference`
+1. **Build the LTSA fixtures** (§6.1) and re-run `dump_reference('sections',{'ltsa','dsp'})` —
+   `dsp` as well, to pick up the new int8 tie-breaking probe. This unblocks the last 4 skips and
+   is the only thing standing between here and the Phase 1 milestone.
+2. **Resolve §4** — pick the canonical MATLAB tree, or merge the two. Re-run `dump_reference`
    afterwards if anything in the pipeline changed.
-4. **Close the three parity coverage gaps in §6** while MATLAB is open anyway; the duty-cycle gap
-   case is the one worth the effort.
-5. Then `triton.io.source` / the session layer (Phase 2).
-6. Phase 1 milestone: `test_python_mkltsa_is_byte_identical` goes from xfail to pass.
+3. **Close the parity coverage gaps in §6** while MATLAB is open anyway; the duty-cycle gap case
+   is the one worth the effort.
+4. Then the session layer (Phase 2).
+5. Phase 1 milestone: `test_python_mkltsa_is_byte_identical` goes from xfail to pass.
 
 Carried over to the MATLAB side, not this repo: the two `WavVersionNumber` fixes in §5a.
 

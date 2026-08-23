@@ -270,6 +270,22 @@ if want('dsp')
                 'source','calc_ltsa.m:159-162'));
             fprintf('  pwelch nfft=%4d -> %d bins\n', nfft, numel(db));
         end
+        % --- int8 quantisation, tie-breaking and saturation, on chosen values
+        % The pwelch dumps above never land on a .5 tie -- measured, the closest any
+        % of them comes is 0.0054 -- so they cannot tell us how MATLAB breaks one.
+        % That matters: MATLAB rounds half AWAY from zero while numpy's round() goes
+        % half to EVEN, so 0.5, 2.5 and 126.5 disagree.  These probe values pin the
+        % rule down where real data does not.  Saturation is included because an LTSA
+        % value outside [-128,127] dB is clipped, not wrapped (ltsa.md 4).
+        q8_probe = [-200.5 -128.5 -127.5 -1.5 -0.5 -0.4 0 0.4 0.5 1.5 2.5 ...
+                    126.5 127.4 127.5 200.5]';
+        tr_dump(opt.out,'int8_quant__in',  q8_probe, 'binary');
+        tr_dump(opt.out,'int8_quant__out', int8(q8_probe), 'binary');
+        tr_dump(opt.out,'int8_quant__meta', struct( ...
+            'note','MATLAB int8() and fwrite(...,''int8'') round half away from zero and saturate', ...
+            'source','calc_ltsa.m write path; see ltsa.md 4'));
+        fprintf('  int8 quantisation probe -> %d values\n', numel(q8_probe));
+
         % the exact input samples, so Python starts from identical data
         load_segment(opt, ref, 0, 5.0);
         tr_dump(opt.out,'dsp_input_samples', DATA(:,1), 'binary');

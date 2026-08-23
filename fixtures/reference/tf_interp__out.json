@@ -1,0 +1,10 @@
+{
+  "name": "tf_interp__out",
+  "dtype": "float64",
+  "shape": [
+    1201,
+    1
+  ],
+  "order": "F",
+  "matlab_class": "double"
+}

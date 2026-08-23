@@ -1,0 +1,10 @@
+{
+  "name": "specgram_nfft256_ol0__t",
+  "dtype": "float64",
+  "shape": [
+    78,
+    1
+  ],
+  "order": "F",
+  "matlab_class": "double"
+}

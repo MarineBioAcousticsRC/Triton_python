@@ -1,0 +1,10 @@
+{
+  "name": "hanning_1024",
+  "dtype": "float64",
+  "shape": [
+    1024,
+    1
+  ],
+  "order": "F",
+  "matlab_class": "double"
+}

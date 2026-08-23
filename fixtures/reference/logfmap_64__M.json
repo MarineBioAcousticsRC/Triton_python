@@ -1,0 +1,10 @@
+{
+  "name": "logfmap_64__M",
+  "dtype": "float64",
+  "shape": [
+    190,
+    64
+  ],
+  "order": "F",
+  "matlab_class": "double"
+}

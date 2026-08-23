@@ -1,0 +1,7 @@
+{
+  "eps_shifted_2011_days": 4.5474735088646412E-13,
+  "eps_true_2011_days": 1.1641532182693481E-10,
+  "eps_shifted_2011_us": 0.0392901711165905,
+  "eps_true_2011_us": 10.058283805847168,
+  "sample_period_us_at_200kHz": 5
+}

@@ -1,0 +1,22 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Real deployment data is never committed -- see fixtures/README.md
+fixtures/real/*
+!fixtures/real/.gitkeep
+!fixtures/real/README.md
+!fixtures/real/MANIFEST.md
+
+# MATLAB leftovers
+*.asv
+*.m~
+slprj/

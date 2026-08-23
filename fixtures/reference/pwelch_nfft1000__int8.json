@@ -1,0 +1,10 @@
+{
+  "name": "pwelch_nfft1000__int8",
+  "dtype": "int8",
+  "shape": [
+    501,
+    1
+  ],
+  "order": "F",
+  "matlab_class": "int8"
+}

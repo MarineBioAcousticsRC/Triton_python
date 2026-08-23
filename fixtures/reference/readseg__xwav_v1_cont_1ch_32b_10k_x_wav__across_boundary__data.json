@@ -1,0 +1,10 @@
+{
+  "name": "readseg__xwav_v1_cont_1ch_32b_10k_x_wav__across_boundary__data",
+  "dtype": "int32",
+  "shape": [
+    5000,
+    1
+  ],
+  "order": "F",
+  "matlab_class": "int32"
+}

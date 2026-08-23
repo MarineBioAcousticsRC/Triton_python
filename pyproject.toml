@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "triton"
+version = "0.0.1.dev0"
+description = "Python port of the Triton passive acoustic analysis package (Scripps Whale Acoustics Lab)"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+]
+
+[project.optional-dependencies]
+# Phase 1 adds soundfile for wav/flac; the x.wav path stays hand-rolled by design.
+io = ["soundfile>=0.12"]
+# Phase 3.
+gui = ["PySide6>=6.6", "pyqtgraph>=0.13", "sounddevice>=0.4", "matplotlib>=3.8"]
+dev = ["pytest>=7.4", "pytest-cov>=4.1", "ruff>=0.5"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# The environment this was set up in has a broken anyio plugin; parity tests need no plugins.
+addopts = "-p no:randomly"
+
+[tool.ruff]
+line-length = 99
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]

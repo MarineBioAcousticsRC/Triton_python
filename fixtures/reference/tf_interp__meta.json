@@ -1,0 +1,6 @@
+{
+  "method": "linear",
+  "extrap": true,
+  "note": "note deliberate extrapolation below 10 Hz and above 100 kHz",
+  "source": "plot_specgram.m:64-77"
+}

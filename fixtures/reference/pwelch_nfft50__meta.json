@@ -1,0 +1,9 @@
+{
+  "file": "xwav_v1_cont_1ch_16b_10k.x.wav",
+  "nfft": 50,
+  "noverlap": 0,
+  "fs": 10000,
+  "nsamples": 50000,
+  "window": "hanning(nfft)",
+  "source": "calc_ltsa.m:159-162"
+}

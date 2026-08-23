@@ -1,0 +1,27 @@
+{
+  "matlab_version": "25.2.0.3150157 (R2025b) Update 4",
+  "matlab_release": "2025b",
+  "computer": "PCWIN64",
+  "generated": "2026-08-04T09:54:15",
+  "triton_path": "D:/Code/Triton-master",
+  "fixtures_path": "D:\\Code\\Triton_python\\fixtures\\generated",
+  "toolboxes": [
+    "Audio Toolbox 25.2",
+    "Computer Vision Toolbox 25.2",
+    "DSP System Toolbox 25.2",
+    "Deep Learning Toolbox 25.2",
+    "Financial Toolbox 25.2",
+    "Image Processing Toolbox 25.2",
+    "MATLAB 25.2",
+    "MATLAB Coder 25.2",
+    "MATLAB Compiler 25.2",
+    "MATLAB Compiler SDK 25.2",
+    "Mapping Toolbox 25.2",
+    "Optimization Toolbox 25.2",
+    "Parallel Computing Toolbox 25.2",
+    "Signal Processing Toolbox 25.2",
+    "Spreadsheet Link 25.2",
+    "Statistics and Machine Learning Toolbox 25.2",
+    "Wavelet Toolbox 25.2"
+  ]
+}

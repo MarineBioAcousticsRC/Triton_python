@@ -1,0 +1,326 @@
+[
+  {
+    "tag": "readseg__xwav_v1_cont_1ch_16b_10k_x_wav__bof",
+    "file": "xwav_v1_cont_1ch_16b_10k.x.wav",
+    "label": "bof",
+    "offset_sec": 0,
+    "tseg_sec": 1,
+    "currentIndex": 1,
+    "data_size": [
+      10000,
+      1
+    ]
+  },
+  {
+    "tag": "readseg__xwav_v1_cont_1ch_16b_10k_x_wav__mid_raw1",
+    "file": "xwav_v1_cont_1ch_16b_10k.x.wav",
+    "label": "mid_raw1",
+    "offset_sec": 0.625,
+    "tseg_sec": 0.5,
+    "currentIndex": 1,
+    "data_size": [
+      5000,
+      1
+    ]
+  },
+  {
+    "tag": "readseg__xwav_v1_cont_1ch_16b_10k_x_wav__across_boundary",
+    "file": "xwav_v1_cont_1ch_16b_10k.x.wav",
+    "label": "across_boundary",
+    "offset_sec": 2.25,
+    "tseg_sec": 0.5,
+    "currentIndex": 1,
+    "data_size": [
+      5000,
+      1
+    ]
+  },
+  {
+    "tag": "readseg__xwav_v1_cont_1ch_16b_200k_x_wav__bof",
+    "file": "xwav_v1_cont_1ch_16b_200k.x.wav",
+    "label": "bof",
+    "offset_sec": 0,
+    "tseg_sec": 0.125,
+    "currentIndex": 1,
+    "data_size": [
+      25000,
+      1
+    ]
+  },
+  {
+    "tag": "readseg__xwav_v1_cont_1ch_16b_200k_x_wav__mid_raw1",
+    "file": "xwav_v1_cont_1ch_16b_200k.x.wav",
+    "label": "mid_raw1",
+    "offset_sec": 0.0625,
+    "tseg_sec": 0.0625,
+    "currentIndex": 1,
+    "data_size": [
+      12500,
+      1
+    ]
+  },
+  {
+    "tag": "readseg__xwav_v1_cont_1ch_16b_200k_x_wav__across_boundary",
+    "file": "xwav_v1_cont_1ch_16b_200k.x.wav",
+    "label": "across_boundary",
+    "offset_sec": 0.1875,
+    "tseg_sec": 0.125,
+    "currentIndex": 1,
+    "data_size": [
+      25000,
+      1
+    ]
+  },
+  {
+    "tag": "readseg__xwav_v1_cont_1ch_32b_10k_x_wav__bof",
+    "file": "xwav_v1_cont_1ch_32b_10k.x.wav",
+    "label": "bof",
+    "offset_sec": 0,
+    "tseg_sec": 1,
+    "currentIndex": 1,
+    "data_size": [
+      10000,
+      1
+    ]
+  },
+  {
+    "tag": "readseg__xwav_v1_cont_1ch_32b_10k_x_wav__mid_raw1",
+    "file": "xwav_v1_cont_1ch_32b_10k.x.wav",
+    "label": "mid_raw1",
+    "offset_sec": 0.625,
+    "tseg_sec": 0.5,
+    "currentIndex": 1,
+    "data_size": [
+      5000,
+      1
+    ]
+  },
+  {
+    "tag": "readseg__xwav_v1_cont_1ch_32b_10k_x_wav__across_boundary",
+    "file": "xwav_v1_cont_1ch_32b_10k.x.wav",
+    "label": "across_boundary",
+    "offset_sec": 2.25,
+    "tseg_sec": 0.5,
+    "currentIndex": 1,
+    "data_size": [
+      5000,
+      1
+    ]
+  },
+  {
+    "tag": "readseg__xwav_v1_cont_4ch_16b_10k_x_wav__bof",
+    "file": "xwav_v1_cont_4ch_16b_10k.x.wav",
+    "label": "bof",
+    "offset_sec": 0,
+    "tseg_sec": 0.31,
+    "currentIndex": 1,
+    "data_size": [
+      3100,
+      4
+    ]
+  },
+  {
+    "tag": "readseg__xwav_v1_cont_4ch_16b_10k_x_wav__mid_raw1",
+    "file": "xwav_v1_cont_4ch_16b_10k.x.wav",
+    "label": "mid_raw1",
+    "offset_sec": 0.155,
+    "tseg_sec": 0.155,
+    "currentIndex": 1,
+    "data_size": [
+      1550,
+      4
+    ]
+  },
+  {
+    "tag": "readseg__xwav_v1_cont_4ch_16b_10k_x_wav__across_boundary",
+    "file": "xwav_v1_cont_4ch_16b_10k.x.wav",
+    "label": "across_boundary",
+    "offset_sec": 0.37,
+    "tseg_sec": 0.5,
+    "currentIndex": 1,
+    "data_size": [
+      5000,
+      4
+    ]
+  },
+  {
+    "tag": "readseg__xwav_v1_duty_1ch_16b_10k_x_wav__bof",
+    "file": "xwav_v1_duty_1ch_16b_10k.x.wav",
+    "label": "bof",
+    "offset_sec": 0,
+    "tseg_sec": 1,
+    "currentIndex": 1,
+    "data_size": [
+      10000,
+      1
+    ]
+  },
+  {
+    "tag": "readseg__xwav_v1_duty_1ch_16b_10k_x_wav__mid_raw1",
+    "file": "xwav_v1_duty_1ch_16b_10k.x.wav",
+    "label": "mid_raw1",
+    "offset_sec": 0.625,
+    "tseg_sec": 0.5,
+    "currentIndex": 1,
+    "data_size": [
+      5000,
+      1
+    ]
+  },
+  {
+    "tag": "readseg__xwav_v1_duty_1ch_16b_10k_x_wav__across_boundary",
+    "file": "xwav_v1_duty_1ch_16b_10k.x.wav",
+    "label": "across_boundary",
+    "offset_sec": 2.25,
+    "tseg_sec": 0.5,
+    "currentIndex": 1,
+    "data_size": [
+      5000,
+      1
+    ]
+  },
+  {
+    "tag": "readseg__xwav_v1_fakefs_1ch_16b_x_wav__bof",
+    "file": "xwav_v1_fakefs_1ch_16b.x.wav",
+    "label": "bof",
+    "offset_sec": 0,
+    "tseg_sec": 0.125,
+    "currentIndex": 1,
+    "data_size": [
+      25000,
+      1
+    ]
+  },
+  {
+    "tag": "readseg__xwav_v1_fakefs_1ch_16b_x_wav__mid_raw1",
+    "file": "xwav_v1_fakefs_1ch_16b.x.wav",
+    "label": "mid_raw1",
+    "offset_sec": 0.0625,
+    "tseg_sec": 0.0625,
+    "currentIndex": 1,
+    "data_size": [
+      12500,
+      1
+    ]
+  },
+  {
+    "tag": "readseg__xwav_v1_fakefs_1ch_16b_x_wav__across_boundary",
+    "file": "xwav_v1_fakefs_1ch_16b.x.wav",
+    "label": "across_boundary",
+    "offset_sec": 0.1875,
+    "tseg_sec": 0.125,
+    "currentIndex": 1,
+    "data_size": [
+      25000,
+      1
+    ]
+  },
+  {
+    "tag": "readseg__xwav_v1_gain4_1ch_16b_10k_x_wav__bof",
+    "file": "xwav_v1_gain4_1ch_16b_10k.x.wav",
+    "label": "bof",
+    "offset_sec": 0,
+    "tseg_sec": 1,
+    "currentIndex": 1,
+    "data_size": [
+      10000,
+      1
+    ]
+  },
+  {
+    "tag": "readseg__xwav_v1_gain4_1ch_16b_10k_x_wav__mid_raw1",
+    "file": "xwav_v1_gain4_1ch_16b_10k.x.wav",
+    "label": "mid_raw1",
+    "offset_sec": 0.625,
+    "tseg_sec": 0.5,
+    "currentIndex": 1,
+    "data_size": [
+      5000,
+      1
+    ]
+  },
+  {
+    "tag": "readseg__xwav_v1_gain4_1ch_16b_10k_x_wav__across_boundary",
+    "file": "xwav_v1_gain4_1ch_16b_10k.x.wav",
+    "label": "across_boundary",
+    "offset_sec": 2.25,
+    "tseg_sec": 0.5,
+    "currentIndex": 1,
+    "data_size": [
+      5000,
+      1
+    ]
+  },
+  {
+    "tag": "readseg__xwav_v1_ticks_1ch_16b_10k_x_wav__bof",
+    "file": "xwav_v1_ticks_1ch_16b_10k.x.wav",
+    "label": "bof",
+    "offset_sec": 0,
+    "tseg_sec": 1,
+    "currentIndex": 1,
+    "data_size": [
+      10000,
+      1
+    ]
+  },
+  {
+    "tag": "readseg__xwav_v1_ticks_1ch_16b_10k_x_wav__mid_raw1",
+    "file": "xwav_v1_ticks_1ch_16b_10k.x.wav",
+    "label": "mid_raw1",
+    "offset_sec": 0.625,
+    "tseg_sec": 0.5,
+    "currentIndex": 1,
+    "data_size": [
+      5000,
+      1
+    ]
+  },
+  {
+    "tag": "readseg__xwav_v1_ticks_1ch_16b_10k_x_wav__across_boundary",
+    "file": "xwav_v1_ticks_1ch_16b_10k.x.wav",
+    "label": "across_boundary",
+    "offset_sec": 2.25,
+    "tseg_sec": 0.5,
+    "currentIndex": 1,
+    "data_size": [
+      5000,
+      1
+    ]
+  },
+  {
+    "tag": "readseg__xwav_v2_cont_1ch_16b_10k_x_wav__bof",
+    "file": "xwav_v2_cont_1ch_16b_10k.x.wav",
+    "label": "bof",
+    "offset_sec": 0,
+    "tseg_sec": 1,
+    "currentIndex": 1,
+    "data_size": [
+      10000,
+      1
+    ]
+  },
+  {
+    "tag": "readseg__xwav_v2_cont_1ch_16b_10k_x_wav__mid_raw1",
+    "file": "xwav_v2_cont_1ch_16b_10k.x.wav",
+    "label": "mid_raw1",
+    "offset_sec": 0.625,
+    "tseg_sec": 0.5,
+    "currentIndex": 1,
+    "data_size": [
+      5000,
+      1
+    ]
+  },
+  {
+    "tag": "readseg__xwav_v2_cont_1ch_16b_10k_x_wav__across_boundary",
+    "file": "xwav_v2_cont_1ch_16b_10k.x.wav",
+    "label": "across_boundary",
+    "offset_sec": 2.25,
+    "tseg_sec": 0.5,
+    "currentIndex": 1,
+    "data_size": [
+      5000,
+      1
+    ]
+  }
+]

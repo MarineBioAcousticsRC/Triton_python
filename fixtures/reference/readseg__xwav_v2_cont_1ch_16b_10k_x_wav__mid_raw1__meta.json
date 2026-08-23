@@ -1,0 +1,19 @@
+{
+  "file": "xwav_v2_cont_1ch_16b_10k.x.wav",
+  "label": "mid_raw1",
+  "requested_offset_sec": 0.625,
+  "tseg_sec": 0.5,
+  "tseg_samp": 5000,
+  "fs": 10000,
+  "nch": 1,
+  "nBits": 16,
+  "xgain": 1,
+  "currentIndex": 1,
+  "delimit_time": 1.8749000126263127,
+  "plot_dnum_hex": "40afa0baab9d6481",
+  "data_size": [
+    5000,
+    1
+  ],
+  "source": "readseg.m + check_time.m"
+}

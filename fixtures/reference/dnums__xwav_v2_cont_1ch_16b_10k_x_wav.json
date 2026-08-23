@@ -1,0 +1,10 @@
+{
+  "name": "dnums__xwav_v2_cont_1ch_16b_10k_x_wav",
+  "dtype": "float64",
+  "shape": [
+    3,
+    2
+  ],
+  "order": "F",
+  "matlab_class": "double"
+}

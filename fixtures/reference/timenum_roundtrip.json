@@ -1,0 +1,10 @@
+{
+  "name": "timenum_roundtrip",
+  "dtype": "float64",
+  "shape": [
+    7,
+    1
+  ],
+  "order": "F",
+  "matlab_class": "double"
+}

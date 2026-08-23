@@ -1,0 +1,1661 @@
+[
+  {
+    "file": "xwav_v1_cont_1ch_16b_10k.x.wav",
+    "xhd": {
+      "ChunkID": "RIFF",
+      "ChunkSize": 200228,
+      "Format": "WAVE",
+      "fSubchunkID": "fmt ",
+      "fSubchunkSize": 16,
+      "AudioFormat": 1,
+      "NumChannels": 1,
+      "SampleRate": 10000,
+      "ByteRate": 20000,
+      "BlockAlign": 2,
+      "BitsPerSample": 16,
+      "hSubchunkID": "harp",
+      "hSubchunkSize": 184,
+      "WavVersionNumber": 1,
+      "FirmwareVersionNumber": "1.0test001",
+      "InstrumentID": "T001",
+      "SiteName": "FIXT",
+      "ExperimentName": "PHASE0FX",
+      "DiskSequenceNumber": 1,
+      "DiskSerialNumber": "FX000001",
+      "NumOfRawFiles": 4,
+      "Longitude": -1.1795E+7,
+      "Latitude": 3.275E+6,
+      "Depth": 1000,
+      "Reserved": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "year": [
+        11,
+        11,
+        11,
+        11
+      ],
+      "month": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "day": [
+        30,
+        30,
+        30,
+        30
+      ],
+      "hour": [
+        8,
+        8,
+        8,
+        8
+      ],
+      "minute": [
+        45,
+        45,
+        45,
+        45
+      ],
+      "secs": [
+        0,
+        2,
+        5,
+        7
+      ],
+      "ticks": [
+        0,
+        500,
+        0,
+        500
+      ],
+      "byte_loc": [
+        236,
+        50236,
+        100236,
+        150236
+      ],
+      "byte_length": [
+        50000,
+        50000,
+        50000,
+        50000
+      ],
+      "write_length": [
+        100,
+        100,
+        100,
+        100
+      ],
+      "sample_rate": [
+        10000,
+        10000,
+        10000,
+        10000
+      ],
+      "gain": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "padding": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "dSubchunkID": "data",
+      "dSubchunkSize": 200000
+    },
+    "fs": 10000,
+    "nch": 1,
+    "nBits": 16,
+    "samp_byte": 2,
+    "xgain": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "raw_dnumStart_hex": [
+      "40afa0baaaaaaaab",
+      "40afa0baae759204",
+      "40afa0bab240795d",
+      "40afa0bab60b60b6"
+    ],
+    "raw_dnumEnd_hex": [
+      "40afa0baae758813",
+      "40afa0bab2406f6c",
+      "40afa0bab60b56c5",
+      "40afa0bab9d63e1e"
+    ],
+    "start_dnum_hex": "40afa0baaaaaaaab",
+    "end_dnum_hex": "40afa0bab9d63e1e",
+    "raw_dvecStart": [
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        0
+      ],
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        2.5
+      ],
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        5
+      ],
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        7.5
+      ]
+    ],
+    "raw_dvecEnd": [
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        2.4999
+      ],
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        4.9999
+      ],
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        7.4999
+      ],
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        9.9999
+      ]
+    ],
+    "io_agrees": true
+  },
+  {
+    "file": "xwav_v1_cont_1ch_16b_200k.x.wav",
+    "xhd": {
+      "ChunkID": "RIFF",
+      "ChunkSize": 400228,
+      "Format": "WAVE",
+      "fSubchunkID": "fmt ",
+      "fSubchunkSize": 16,
+      "AudioFormat": 1,
+      "NumChannels": 1,
+      "SampleRate": 200000,
+      "ByteRate": 400000,
+      "BlockAlign": 2,
+      "BitsPerSample": 16,
+      "hSubchunkID": "harp",
+      "hSubchunkSize": 184,
+      "WavVersionNumber": 1,
+      "FirmwareVersionNumber": "1.0test001",
+      "InstrumentID": "T001",
+      "SiteName": "FIXT",
+      "ExperimentName": "PHASE0FX",
+      "DiskSequenceNumber": 1,
+      "DiskSerialNumber": "FX000001",
+      "NumOfRawFiles": 4,
+      "Longitude": -1.1795E+7,
+      "Latitude": 3.275E+6,
+      "Depth": 1000,
+      "Reserved": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "year": [
+        11,
+        11,
+        11,
+        11
+      ],
+      "month": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "day": [
+        30,
+        30,
+        30,
+        30
+      ],
+      "hour": [
+        8,
+        8,
+        8,
+        8
+      ],
+      "minute": [
+        45,
+        45,
+        45,
+        45
+      ],
+      "secs": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "ticks": [
+        0,
+        250,
+        500,
+        750
+      ],
+      "byte_loc": [
+        236,
+        100236,
+        200236,
+        300236
+      ],
+      "byte_length": [
+        100000,
+        100000,
+        100000,
+        100000
+      ],
+      "write_length": [
+        200,
+        200,
+        200,
+        200
+      ],
+      "sample_rate": [
+        200000,
+        200000,
+        200000,
+        200000
+      ],
+      "gain": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "padding": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "dSubchunkID": "data",
+      "dSubchunkSize": 400000
+    },
+    "fs": 200000,
+    "nch": 1,
+    "nBits": 16,
+    "samp_byte": 2,
+    "xgain": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "raw_dnumStart_hex": [
+      "40afa0baaaaaaaab",
+      "40afa0baab0bc1cd",
+      "40afa0baab6cd8f0",
+      "40afa0baabcdf012"
+    ],
+    "raw_dnumEnd_hex": [
+      "40afa0baab0bc14e",
+      "40afa0baab6cd870",
+      "40afa0baabcdef93",
+      "40afa0baac2f06b5"
+    ],
+    "start_dnum_hex": "40afa0baaaaaaaab",
+    "end_dnum_hex": "40afa0baac2f06b5",
+    "raw_dvecStart": [
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        0
+      ],
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        0.25
+      ],
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        0.5
+      ],
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        0.75
+      ]
+    ],
+    "raw_dvecEnd": [
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        0.249995
+      ],
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        0.49999499999999997
+      ],
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        0.749995
+      ],
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        0.999995
+      ]
+    ],
+    "io_agrees": true
+  },
+  {
+    "file": "xwav_v1_cont_1ch_32b_10k.x.wav",
+    "xhd": {
+      "ChunkID": "RIFF",
+      "ChunkSize": 200164,
+      "Format": "WAVE",
+      "fSubchunkID": "fmt ",
+      "fSubchunkSize": 16,
+      "AudioFormat": 1,
+      "NumChannels": 1,
+      "SampleRate": 10000,
+      "ByteRate": 40000,
+      "BlockAlign": 4,
+      "BitsPerSample": 32,
+      "hSubchunkID": "harp",
+      "hSubchunkSize": 120,
+      "WavVersionNumber": 1,
+      "FirmwareVersionNumber": "1.0test001",
+      "InstrumentID": "T001",
+      "SiteName": "FIXT",
+      "ExperimentName": "PHASE0FX",
+      "DiskSequenceNumber": 1,
+      "DiskSerialNumber": "FX000001",
+      "NumOfRawFiles": 2,
+      "Longitude": -1.1795E+7,
+      "Latitude": 3.275E+6,
+      "Depth": 1000,
+      "Reserved": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "year": [
+        11,
+        11
+      ],
+      "month": [
+        1,
+        1
+      ],
+      "day": [
+        30,
+        30
+      ],
+      "hour": [
+        8,
+        8
+      ],
+      "minute": [
+        45,
+        45
+      ],
+      "secs": [
+        0,
+        2
+      ],
+      "ticks": [
+        0,
+        500
+      ],
+      "byte_loc": [
+        172,
+        100172
+      ],
+      "byte_length": [
+        100000,
+        100000
+      ],
+      "write_length": [
+        100,
+        100
+      ],
+      "sample_rate": [
+        10000,
+        10000
+      ],
+      "gain": [
+        1,
+        1
+      ],
+      "padding": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "dSubchunkID": "data",
+      "dSubchunkSize": 200000
+    },
+    "fs": 10000,
+    "nch": 1,
+    "nBits": 32,
+    "samp_byte": 4,
+    "xgain": [
+      1,
+      1
+    ],
+    "raw_dnumStart_hex": [
+      "40afa0baaaaaaaab",
+      "40afa0baae759204"
+    ],
+    "raw_dnumEnd_hex": [
+      "40afa0baae758d0c",
+      "40afa0bab2407465"
+    ],
+    "start_dnum_hex": "40afa0baaaaaaaab",
+    "end_dnum_hex": "40afa0bab2407465",
+    "raw_dvecStart": [
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        0
+      ],
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        2.5
+      ]
+    ],
+    "raw_dvecEnd": [
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        2.49995
+      ],
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        4.99995
+      ]
+    ],
+    "io_agrees": true
+  },
+  {
+    "file": "xwav_v1_cont_4ch_16b_10k.x.wav",
+    "xhd": {
+      "ChunkID": "RIFF",
+      "ChunkSize": 148996,
+      "Format": "WAVE",
+      "fSubchunkID": "fmt ",
+      "fSubchunkSize": 16,
+      "AudioFormat": 1,
+      "NumChannels": 4,
+      "SampleRate": 10000,
+      "ByteRate": 80000,
+      "BlockAlign": 8,
+      "BitsPerSample": 16,
+      "hSubchunkID": "harp",
+      "hSubchunkSize": 152,
+      "WavVersionNumber": 1,
+      "FirmwareVersionNumber": "1.0test001",
+      "InstrumentID": "T001",
+      "SiteName": "FIXT",
+      "ExperimentName": "PHASE0FX",
+      "DiskSequenceNumber": 1,
+      "DiskSerialNumber": "FX000001",
+      "NumOfRawFiles": 3,
+      "Longitude": -1.1795E+7,
+      "Latitude": 3.275E+6,
+      "Depth": 1000,
+      "Reserved": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "year": [
+        11,
+        11,
+        11
+      ],
+      "month": [
+        1,
+        1,
+        1
+      ],
+      "day": [
+        30,
+        30,
+        30
+      ],
+      "hour": [
+        8,
+        8,
+        8
+      ],
+      "minute": [
+        45,
+        45,
+        45
+      ],
+      "secs": [
+        0,
+        0,
+        1
+      ],
+      "ticks": [
+        0,
+        620,
+        240
+      ],
+      "byte_loc": [
+        204,
+        49804,
+        99404
+      ],
+      "byte_length": [
+        49600,
+        49600,
+        49600
+      ],
+      "write_length": [
+        100,
+        100,
+        100
+      ],
+      "sample_rate": [
+        10000,
+        10000,
+        10000
+      ],
+      "gain": [
+        1,
+        1,
+        1
+      ],
+      "padding": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "dSubchunkID": "data",
+      "dSubchunkSize": 148800
+    },
+    "fs": 10000,
+    "nch": 4,
+    "nBits": 16,
+    "samp_byte": 2,
+    "xgain": [
+      1,
+      1,
+      1
+    ],
+    "raw_dnumStart_hex": [
+      "40afa0baaaaaaaab",
+      "40afa0baab9b7367",
+      "40afa0baac8c3c23"
+    ],
+    "raw_dnumEnd_hex": [
+      "40afa0baab9b70eb",
+      "40afa0baac8c39a7",
+      "40afa0baad7d0263"
+    ],
+    "start_dnum_hex": "40afa0baaaaaaaab",
+    "end_dnum_hex": "40afa0baad7d0263",
+    "raw_dvecStart": [
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        0
+      ],
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        0.62
+      ],
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        1.24
+      ]
+    ],
+    "raw_dvecEnd": [
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        0.619975
+      ],
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        1.239975
+      ],
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        1.859975
+      ]
+    ],
+    "io_agrees": true
+  },
+  {
+    "file": "xwav_v1_duty_1ch_16b_10k.x.wav",
+    "xhd": {
+      "ChunkID": "RIFF",
+      "ChunkSize": 200228,
+      "Format": "WAVE",
+      "fSubchunkID": "fmt ",
+      "fSubchunkSize": 16,
+      "AudioFormat": 1,
+      "NumChannels": 1,
+      "SampleRate": 10000,
+      "ByteRate": 20000,
+      "BlockAlign": 2,
+      "BitsPerSample": 16,
+      "hSubchunkID": "harp",
+      "hSubchunkSize": 184,
+      "WavVersionNumber": 1,
+      "FirmwareVersionNumber": "1.0test001",
+      "InstrumentID": "T001",
+      "SiteName": "FIXT",
+      "ExperimentName": "PHASE0FX",
+      "DiskSequenceNumber": 1,
+      "DiskSerialNumber": "FX000001",
+      "NumOfRawFiles": 4,
+      "Longitude": -1.1795E+7,
+      "Latitude": 3.275E+6,
+      "Depth": 1000,
+      "Reserved": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "year": [
+        11,
+        11,
+        11,
+        11
+      ],
+      "month": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "day": [
+        30,
+        30,
+        30,
+        30
+      ],
+      "hour": [
+        8,
+        8,
+        8,
+        8
+      ],
+      "minute": [
+        45,
+        45,
+        45,
+        45
+      ],
+      "secs": [
+        0,
+        10,
+        20,
+        30
+      ],
+      "ticks": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "byte_loc": [
+        236,
+        50236,
+        100236,
+        150236
+      ],
+      "byte_length": [
+        50000,
+        50000,
+        50000,
+        50000
+      ],
+      "write_length": [
+        100,
+        100,
+        100,
+        100
+      ],
+      "sample_rate": [
+        10000,
+        10000,
+        10000,
+        10000
+      ],
+      "gain": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "padding": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "dSubchunkID": "data",
+      "dSubchunkSize": 200000
+    },
+    "fs": 10000,
+    "nch": 1,
+    "nBits": 16,
+    "samp_byte": 2,
+    "xgain": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "raw_dnumStart_hex": [
+      "40afa0baaaaaaaab",
+      "40afa0bab9d6480f",
+      "40afa0bac901e574",
+      "40afa0bad82d82d8"
+    ],
+    "raw_dnumEnd_hex": [
+      "40afa0baae758813",
+      "40afa0babda12577",
+      "40afa0baccccc2dc",
+      "40afa0badbf86040"
+    ],
+    "start_dnum_hex": "40afa0baaaaaaaab",
+    "end_dnum_hex": "40afa0badbf86040",
+    "raw_dvecStart": [
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        0
+      ],
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        10
+      ],
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        20
+      ],
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        30
+      ]
+    ],
+    "raw_dvecEnd": [
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        2.4999
+      ],
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        12.4999
+      ],
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        22.4999
+      ],
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        32.4999
+      ]
+    ],
+    "io_agrees": true
+  },
+  {
+    "file": "xwav_v1_fakefs_1ch_16b.x.wav",
+    "xhd": {
+      "ChunkID": "RIFF",
+      "ChunkSize": 200164,
+      "Format": "WAVE",
+      "fSubchunkID": "fmt ",
+      "fSubchunkSize": 16,
+      "AudioFormat": 1,
+      "NumChannels": 1,
+      "SampleRate": 100000,
+      "ByteRate": 200000,
+      "BlockAlign": 2,
+      "BitsPerSample": 16,
+      "hSubchunkID": "harp",
+      "hSubchunkSize": 120,
+      "WavVersionNumber": 1,
+      "FirmwareVersionNumber": "1.0test001",
+      "InstrumentID": "T001",
+      "SiteName": "FIXT",
+      "ExperimentName": "PHASE0FX",
+      "DiskSequenceNumber": 1,
+      "DiskSerialNumber": "FX000001",
+      "NumOfRawFiles": 2,
+      "Longitude": -1.1795E+7,
+      "Latitude": 3.275E+6,
+      "Depth": 1000,
+      "Reserved": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "year": [
+        11,
+        11
+      ],
+      "month": [
+        1,
+        1
+      ],
+      "day": [
+        30,
+        30
+      ],
+      "hour": [
+        8,
+        8
+      ],
+      "minute": [
+        45,
+        45
+      ],
+      "secs": [
+        0,
+        0
+      ],
+      "ticks": [
+        0,
+        250
+      ],
+      "byte_loc": [
+        172,
+        100172
+      ],
+      "byte_length": [
+        100000,
+        100000
+      ],
+      "write_length": [
+        200,
+        200
+      ],
+      "sample_rate": [
+        200000,
+        200000
+      ],
+      "gain": [
+        1,
+        1
+      ],
+      "padding": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "dSubchunkID": "data",
+      "dSubchunkSize": 200000
+    },
+    "fs": 200000,
+    "nch": 1,
+    "nBits": 16,
+    "samp_byte": 2,
+    "xgain": [
+      1,
+      1
+    ],
+    "raw_dnumStart_hex": [
+      "40afa0baaaaaaaab",
+      "40afa0baab0bc1cd"
+    ],
+    "raw_dnumEnd_hex": [
+      "40afa0baab6cd7f2",
+      "40afa0baabcdef14"
+    ],
+    "start_dnum_hex": "40afa0baaaaaaaab",
+    "end_dnum_hex": "40afa0baabcdef14",
+    "raw_dvecStart": [
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        0
+      ],
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        0.25
+      ]
+    ],
+    "raw_dvecEnd": [
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        0.49999
+      ],
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        0.74998999999999993
+      ]
+    ],
+    "io_agrees": true
+  },
+  {
+    "file": "xwav_v1_gain4_1ch_16b_10k.x.wav",
+    "xhd": {
+      "ChunkID": "RIFF",
+      "ChunkSize": 100164,
+      "Format": "WAVE",
+      "fSubchunkID": "fmt ",
+      "fSubchunkSize": 16,
+      "AudioFormat": 1,
+      "NumChannels": 1,
+      "SampleRate": 10000,
+      "ByteRate": 20000,
+      "BlockAlign": 2,
+      "BitsPerSample": 16,
+      "hSubchunkID": "harp",
+      "hSubchunkSize": 120,
+      "WavVersionNumber": 1,
+      "FirmwareVersionNumber": "1.0test001",
+      "InstrumentID": "T001",
+      "SiteName": "FIXT",
+      "ExperimentName": "PHASE0FX",
+      "DiskSequenceNumber": 1,
+      "DiskSerialNumber": "FX000001",
+      "NumOfRawFiles": 2,
+      "Longitude": -1.1795E+7,
+      "Latitude": 3.275E+6,
+      "Depth": 1000,
+      "Reserved": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "year": [
+        11,
+        11
+      ],
+      "month": [
+        1,
+        1
+      ],
+      "day": [
+        30,
+        30
+      ],
+      "hour": [
+        8,
+        8
+      ],
+      "minute": [
+        45,
+        45
+      ],
+      "secs": [
+        0,
+        2
+      ],
+      "ticks": [
+        0,
+        500
+      ],
+      "byte_loc": [
+        172,
+        50172
+      ],
+      "byte_length": [
+        50000,
+        50000
+      ],
+      "write_length": [
+        100,
+        100
+      ],
+      "sample_rate": [
+        10000,
+        10000
+      ],
+      "gain": [
+        4,
+        4
+      ],
+      "padding": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "dSubchunkID": "data",
+      "dSubchunkSize": 100000
+    },
+    "fs": 10000,
+    "nch": 1,
+    "nBits": 16,
+    "samp_byte": 2,
+    "xgain": [
+      4,
+      4
+    ],
+    "raw_dnumStart_hex": [
+      "40afa0baaaaaaaab",
+      "40afa0baae759204"
+    ],
+    "raw_dnumEnd_hex": [
+      "40afa0baae758813",
+      "40afa0bab2406f6c"
+    ],
+    "start_dnum_hex": "40afa0baaaaaaaab",
+    "end_dnum_hex": "40afa0bab2406f6c",
+    "raw_dvecStart": [
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        0
+      ],
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        2.5
+      ]
+    ],
+    "raw_dvecEnd": [
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        2.4999
+      ],
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        4.9999
+      ]
+    ],
+    "io_agrees": true
+  },
+  {
+    "file": "xwav_v1_ticks_1ch_16b_10k.x.wav",
+    "xhd": {
+      "ChunkID": "RIFF",
+      "ChunkSize": 150196,
+      "Format": "WAVE",
+      "fSubchunkID": "fmt ",
+      "fSubchunkSize": 16,
+      "AudioFormat": 1,
+      "NumChannels": 1,
+      "SampleRate": 10000,
+      "ByteRate": 20000,
+      "BlockAlign": 2,
+      "BitsPerSample": 16,
+      "hSubchunkID": "harp",
+      "hSubchunkSize": 152,
+      "WavVersionNumber": 1,
+      "FirmwareVersionNumber": "1.0test001",
+      "InstrumentID": "T001",
+      "SiteName": "FIXT",
+      "ExperimentName": "PHASE0FX",
+      "DiskSequenceNumber": 1,
+      "DiskSerialNumber": "FX000001",
+      "NumOfRawFiles": 3,
+      "Longitude": -1.1795E+7,
+      "Latitude": 3.275E+6,
+      "Depth": 1000,
+      "Reserved": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "year": [
+        11,
+        11,
+        11
+      ],
+      "month": [
+        1,
+        1,
+        1
+      ],
+      "day": [
+        30,
+        30,
+        30
+      ],
+      "hour": [
+        8,
+        8,
+        8
+      ],
+      "minute": [
+        45,
+        45,
+        45
+      ],
+      "secs": [
+        0,
+        3,
+        7
+      ],
+      "ticks": [
+        125,
+        825,
+        525
+      ],
+      "byte_loc": [
+        204,
+        50204,
+        100204
+      ],
+      "byte_length": [
+        50000,
+        50000,
+        50000
+      ],
+      "write_length": [
+        100,
+        100,
+        100
+      ],
+      "sample_rate": [
+        10000,
+        10000,
+        10000
+      ],
+      "gain": [
+        1,
+        1,
+        1
+      ],
+      "padding": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "dSubchunkID": "data",
+      "dSubchunkSize": 150000
+    },
+    "fs": 10000,
+    "nch": 1,
+    "nBits": 16,
+    "samp_byte": 2,
+    "xgain": [
+      1,
+      1,
+      1
+    ],
+    "raw_dnumStart_hex": [
+      "40afa0baaadb363c",
+      "40afa0bab078263b",
+      "40afa0bab6151639"
+    ],
+    "raw_dnumEnd_hex": [
+      "40afa0baaea613a4",
+      "40afa0bab44303a3",
+      "40afa0bab9dff3a1"
+    ],
+    "start_dnum_hex": "40afa0baaadb363c",
+    "end_dnum_hex": "40afa0bab9dff3a1",
+    "raw_dvecStart": [
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        0.125
+      ],
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        3.825
+      ],
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        7.525
+      ]
+    ],
+    "raw_dvecEnd": [
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        2.6249
+      ],
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        6.3248999999999995
+      ],
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        10.0249
+      ]
+    ],
+    "io_agrees": true
+  },
+  {
+    "file": "xwav_v2_cont_1ch_16b_10k.x.wav",
+    "xhd": {
+      "ChunkID": "RIFF",
+      "ChunkSize": 150212,
+      "Format": "WAVE",
+      "fSubchunkID": "fmt ",
+      "fSubchunkSize": 16,
+      "AudioFormat": 1,
+      "NumChannels": 1,
+      "SampleRate": 10000,
+      "ByteRate": 20000,
+      "BlockAlign": 2,
+      "BitsPerSample": 16,
+      "hSubchunkID": "harp",
+      "hSubchunkSize": 168,
+      "WavVersionNumber": 2,
+      "FirmwareVersionNumber": "1.0test001",
+      "InstrumentID": "T001",
+      "SiteName": "FIXT",
+      "ExperimentName": "PHASE0FX",
+      "DiskSequenceNumber": 1,
+      "DiskSerialNumber": "FX000001",
+      "NumOfRawFiles": 3,
+      "Longitude": -1.1795E+7,
+      "Latitude": 3.275E+6,
+      "Depth": 1000,
+      "drate": 10000,
+      "Reserved": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "year": [
+        11,
+        11,
+        11
+      ],
+      "month": [
+        1,
+        1,
+        1
+      ],
+      "day": [
+        30,
+        30,
+        30
+      ],
+      "hour": [
+        8,
+        8,
+        8
+      ],
+      "minute": [
+        45,
+        45,
+        45
+      ],
+      "secs": [
+        0,
+        2,
+        5
+      ],
+      "ticks": [
+        0,
+        500,
+        0
+      ],
+      "byte_loc": [
+        220,
+        50220,
+        100220
+      ],
+      "byte_length": [
+        50000,
+        50000,
+        50000
+      ],
+      "write_length": [
+        100,
+        100,
+        100
+      ],
+      "sample_rate": [
+        10000,
+        10000,
+        10000
+      ],
+      "gain": [
+        1,
+        1,
+        1
+      ],
+      "padding": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "dt": 0,
+      "dSubchunkID": "data",
+      "dSubchunkSize": 150000
+    },
+    "fs": 10000,
+    "nch": 1,
+    "nBits": 16,
+    "samp_byte": 2,
+    "xgain": [
+      1,
+      1,
+      1
+    ],
+    "raw_dnumStart_hex": [
+      "40afa0baaaaaaaab",
+      "40afa0baae759204",
+      "40afa0bab240795d"
+    ],
+    "raw_dnumEnd_hex": [
+      "40afa0baae758813",
+      "40afa0bab2406f6c",
+      "40afa0bab60b56c5"
+    ],
+    "start_dnum_hex": "40afa0baaaaaaaab",
+    "end_dnum_hex": "40afa0bab60b56c5",
+    "raw_dvecStart": [
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        0
+      ],
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        2.5
+      ],
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        5
+      ]
+    ],
+    "raw_dvecEnd": [
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        2.4999
+      ],
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        4.9999
+      ],
+      [
+        11,
+        1,
+        30,
+        8,
+        45,
+        7.4999
+      ]
+    ],
+    "io_agrees": false,
+    "io_error": "Unrecognized field name \"byte_loc\"."
+  }
+]

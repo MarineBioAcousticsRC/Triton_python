@@ -1,0 +1,4 @@
+{
+  "matlab_call": "hanning(N)",
+  "scipy_equivalent": "scipy.signal.windows.hann(N+2, sym=True)[1:-1]"
+}

@@ -1,0 +1,22 @@
+{
+  "file": "xwav_v1_ticks_1ch_16b_10k.x.wav",
+  "label": "across_boundary",
+  "requested_offset_sec": 2.25,
+  "tseg_sec": 0.5,
+  "tseg_samp": 5000,
+  "fs": 10000,
+  "nch": 1,
+  "nBits": 16,
+  "xgain": 1,
+  "currentIndex": 1,
+  "delimit_time": [
+    0.2498999863746576,
+    2.7498999863746576
+  ],
+  "plot_dnum_hex": "40afa0baae450673",
+  "data_size": [
+    5000,
+    1
+  ],
+  "source": "readseg.m + check_time.m"
+}

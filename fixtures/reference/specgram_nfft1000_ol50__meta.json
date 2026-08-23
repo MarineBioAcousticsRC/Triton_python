@@ -1,0 +1,13 @@
+{
+  "file": "xwav_v1_cont_1ch_16b_10k.x.wav",
+  "nfft": 1000,
+  "overlap": 50,
+  "fs": 10000,
+  "freq0": 0,
+  "freq1": 5000,
+  "fimin": 1,
+  "fimax": 501,
+  "plot_start_offset_sec": 0,
+  "duration_sec": 2,
+  "source": "mkspecgram.m"
+}

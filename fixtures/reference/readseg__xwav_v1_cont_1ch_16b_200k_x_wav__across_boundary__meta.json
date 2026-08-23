@@ -1,0 +1,22 @@
+{
+  "file": "xwav_v1_cont_1ch_16b_200k.x.wav",
+  "label": "across_boundary",
+  "requested_offset_sec": 0.1875,
+  "tseg_sec": 0.125,
+  "tseg_samp": 25000,
+  "fs": 200000,
+  "nch": 1,
+  "nBits": 16,
+  "xgain": 1,
+  "currentIndex": 1,
+  "delimit_time": [
+    0.062494985468219966,
+    0.31249498546821997
+  ],
+  "plot_dnum_hex": "40afa0baaaf37c05",
+  "data_size": [
+    25000,
+    1
+  ],
+  "source": "readseg.m + check_time.m"
+}

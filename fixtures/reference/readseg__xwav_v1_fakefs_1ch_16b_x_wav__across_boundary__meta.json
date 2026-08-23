@@ -1,0 +1,19 @@
+{
+  "file": "xwav_v1_fakefs_1ch_16b.x.wav",
+  "label": "across_boundary",
+  "requested_offset_sec": 0.1875,
+  "tseg_sec": 0.125,
+  "tseg_samp": 25000,
+  "fs": 200000,
+  "nch": 1,
+  "nBits": 16,
+  "xgain": 1,
+  "currentIndex": 1,
+  "delimit_time": 0.3124900147668086,
+  "plot_dnum_hex": "40afa0baaaf37c05",
+  "data_size": [
+    25000,
+    1
+  ],
+  "source": "readseg.m + check_time.m"
+}

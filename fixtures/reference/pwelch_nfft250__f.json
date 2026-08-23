@@ -1,0 +1,10 @@
+{
+  "name": "pwelch_nfft250__f",
+  "dtype": "float64",
+  "shape": [
+    126,
+    1
+  ],
+  "order": "F",
+  "matlab_class": "double"
+}

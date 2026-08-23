@@ -1,0 +1,19 @@
+{
+  "file": "xwav_v1_cont_4ch_16b_10k.x.wav",
+  "label": "bof",
+  "requested_offset_sec": 0,
+  "tseg_sec": 0.31,
+  "tseg_samp": 3100,
+  "fs": 10000,
+  "nch": 4,
+  "nBits": 16,
+  "xgain": 1,
+  "currentIndex": 1,
+  "delimit_time": 0.6199750117957592,
+  "plot_dnum_hex": "40afa0baaaaaaaab",
+  "data_size": [
+    3100,
+    4
+  ],
+  "source": "readseg.m + check_time.m"
+}

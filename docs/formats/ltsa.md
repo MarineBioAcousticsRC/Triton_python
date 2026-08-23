@@ -121,6 +121,10 @@ runs across raw-file boundaries (same splice behaviour as x.wav; see
 
 ## 5. How the values are computed
 
+> Two behaviours in this section are reproduced deliberately rather than fixed, and both are
+> tracked in **[OPEN_DECISIONS.md](../OPEN_DECISIONS.md)**: the last spectral average of each raw
+> file re-reads earlier data (§1.1), and the entry end time is one sample short (§1.5).
+
 `calc_ltsa.m`:
 
 ```matlab

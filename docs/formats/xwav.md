@@ -240,7 +240,10 @@ Port this triage verbatim; it encodes years of field-data experience.
 
 ## 6. Known inconsistencies in the MATLAB implementation
 
-Flagged for a decision rather than blind reproduction:
+Flagged for a decision rather than blind reproduction. The ones that need an actual decision --
+because fixing them would change numbers already published -- are tracked with their evidence and
+consequences in **[OPEN_DECISIONS.md](../OPEN_DECISIONS.md)**. This list stays as the
+format-level reference.
 
 1. **32-bit `AudioFormat`.** `wrxwavhd.m:107` writes `AudioFormat = 3` (IEEE float) for 32-bit
    files, but `readseg.m:100` reads them as `int32`. One of the two is wrong. Needs a real 32-bit

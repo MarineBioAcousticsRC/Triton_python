@@ -232,8 +232,15 @@ with:
   convenience. This is deliberately *a* global seam, but exactly one, documented and typed,
   instead of forty `global PARAMS` declarations.
 - **`session.as_params()`** — returns a nested plain dict shaped like today's `PARAMS`, so existing
-  mental models, docs, and `export_params`-to-`.mat` all keep working. This is the compatibility
-  promise that should win over the pro-globals camp.
+  mental models, docs, and `export_params`-to-`.mat` keep working.
+
+  **Decided 2026-08-23:** this is for **inspection and debugging by expert users** who care about
+  x.wav and LTSA internals — not a compatibility layer for unmodified Remoras. Remoras get
+  modified to use the session object. That distinction matters more than it looks: a compatibility
+  layer would have to reproduce `PARAMS`'s quirks faithfully, including the ones in
+  [OPEN_DECISIONS.md](docs/OPEN_DECISIONS.md) §1, and would then constrain the session's own
+  design to whatever the old shape could express. As an inspection view it is free to be
+  read-only, best-effort, and clearer than the original.
 - **An embedded Python console in the app** (Qt `qtconsole` / embedded IPython kernel) with `S`
   pre-bound to the live session. This is *strictly better* than typing `PARAMS.xhd` at the MATLAB
   prompt: tab completion, docstrings, type hints, and it works while the app is running and idle,
@@ -242,6 +249,12 @@ with:
   copy-as-JSON, plus `session.snapshot()` to dump state + provenance for bug reports.
 - **Change notification** — mutations go through the session and emit `changed(path)`; the UI
   subscribes. This deletes most of `control.m`.
+
+  **Decided 2026-08-23:** **framework-agnostic**, not Qt signals. Qt signals would be the natural
+  choice given Phase 3, but importing Qt into the session layer would destroy the property Phase
+  2's milestone is built on — that the whole data path runs headless, in a test, with no GUI
+  toolkit installed. A small callback registry that Phase 3 adapts to Qt costs little and keeps
+  batch and CI use honest.
 
 What this buys that the global cannot: multiple open datasets, headless/batch use of the same code
 paths, unit tests without a GUI, undo, and validation at assignment time.

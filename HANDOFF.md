@@ -442,6 +442,11 @@ exists (§6, Resolved).
 
 ### Open questions
 
+> Everything in this subsection, plus the deferred items below and the format-doc "known
+> inconsistencies" lists, is now collected in **[docs/OPEN_DECISIONS.md](docs/OPEN_DECISIONS.md)**
+> with the evidence, what would change if each were fixed, and who can settle it. That file is the
+> canonical register; this table is kept as a quick index. Add new items *there*.
+
 | Question | Status |
 |---|---|
 | 32-bit `AudioFormat`: `wrxwavhd` writes 3 (float), `readseg` reads int32 | **Open.** Needs one real 32-bit x.wav. Fixture currently writes `AudioFormat = 1` with int32 samples |

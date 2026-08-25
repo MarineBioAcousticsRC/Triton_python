@@ -32,6 +32,7 @@ __all__ = [
     "welch_db",
     "to_int8_db",
     "apply_transfer_function_curve",
+    "display_filter",
 ]
 
 
@@ -259,3 +260,40 @@ def apply_transfer_function_curve(
         slope = (vp[-1] - vp[-2]) / (fp[-1] - fp[-2])
         out[hi] = vp[-1] + slope * (fq[hi] - fp[-1])
     return out
+
+
+def display_filter(
+    x: np.ndarray, fs: float, f1: float, f2: float
+) -> np.ndarray:
+    """Zero-phase FIR band-pass for display only.  Port of ``display_filter.m``.
+
+    Display only, and that matters: it is applied to what is drawn, never to what is
+    measured or written. ``filtfilt`` runs the filter forwards and backwards, which
+    doubles the effective order and gives zero phase distortion -- appropriate for
+    looking at a spectrogram, wrong for anything timing-sensitive.
+
+    The order adapts to the data because ``filtfilt`` needs more than three times the
+    filter order in samples; a short window would otherwise raise rather than draw.
+    A degenerate band is returned unfiltered rather than refused, since a user dragging
+    a frequency control through an invalid state should see the unfiltered data, not an
+    error dialog.
+
+    **Apply this once per window, not once per panel.** In MATLAB each of
+    ``plot_specgram``, ``plot_timeseries`` and ``plot_spectra`` filters the shared
+    ``DATA`` global and assigns the result back, so showing three panels band-passes the
+    data three times and the panels disagree by up to ~20 dB at the filter corners
+    (OPEN_DECISIONS §1.6). :meth:`triton.session.TritonSession.frame` calls this once
+    and hands the same array to every panel.
+    """
+    from scipy.signal import filtfilt, firwin
+
+    x = np.asarray(x, dtype=np.float64)
+    x = x - x.mean()                        # remove DC before filtering
+    wn = np.clip(np.asarray([f1, f2], dtype=np.float64) / (fs / 2.0), 1e-6, 1 - 1e-6)
+    if wn[1] <= wn[0]:
+        return x                            # degenerate band; leave as-is
+    n_order = min(200, 2 * ((x.size - 1) // 6))
+    if n_order < 4:
+        return x                            # too short to filter meaningfully
+    b = firwin(n_order + 1, wn, pass_zero=False)
+    return filtfilt(b, np.asarray([1.0]), x)

@@ -26,6 +26,7 @@ Both are defensible and the choice belongs to the people whose papers depend on 
 | [1.3](#13-only-the-last-raw-files-dt-and-padding-survive) | `rdxwavhd` `dt`/`padding` overwrite | v2 multichannel timing | Needs the Remora audit first |
 | [1.4](#14-gain-is-applied-to-one-channel-only) | multichannel gain-corrected data | Lab — has this ever bitten? |
 | [1.5](#15-two-end-of-file-times-are-one-sample-short) | which raw file a time resolves to | Low stakes, but pick one |
+| [1.6](#16-the-display-filter-is-applied-once-per-visible-panel) | Display filter compounds per visible panel | on-screen dB near the filter corners | Fix, but tell filter users |
 | [2.1](#21-is-audioformat-3-or-int32-for-32-bit-xwav) | 32-bit `AudioFormat` | how 32-bit files are read | Needs one real 32-bit file |
 | [2.2](#22-do-v2-header-xwav-files-exist) | severity of the `io/` v2 blindness | Needs an archive search |
 | [2.3](#23-do-xwav-files-with-other-than-1-or-4-channels-exist) | whether `blksz` needs more cases | Needs an archive search |
@@ -176,6 +177,56 @@ truth is 7.5 s.
 
 **Low stakes**, but worth settling rather than leaving two different conventions in place.
 **Status.** Open. Both reproduced exactly.
+
+### 1.6 The display filter is applied once per visible panel
+
+**What.** `plot_specgram.m:27`, `plot_timeseries.m:28` and `plot_spectra.m:27` each do the same
+thing to the *shared global*:
+
+```matlab
+if PARAMS.filter
+    DATA(:,PARAMS.ch) = display_filter(DATA(:,PARAMS.ch), PARAMS.fs, PARAMS.ff1, PARAMS.ff2);
+end
+```
+
+`DATA` is set once by `readseg` before `plot_triton` runs, and `plot_triton` then calls each
+enabled panel in turn. So with the display filter on and all three of those panels shown, the data
+is band-passed **three times cumulatively** — and because the assignment writes back, the panel
+drawn *first* sees single-filtered data while the panel drawn *last* sees triple-filtered data.
+Which panels are enabled changes what each one shows.
+
+This is original behaviour, not a regression: before the shared `display_filter.m` was factored
+out, each routine did `DATA(:,PARAMS.ch) = filter(b,a,DATA(:,PARAMS.ch))` with its own elliptical
+design. The write-back has always been there.
+
+**Measured**, 1 s at 10 kHz, band-pass 200–3000 Hz, comparing the spectra panel (3 passes) against
+the spectrogram panel (1 pass):
+
+| | difference |
+|---|---|
+| total in-band power | +0.07 dB |
+| median across the passband | +0.01 dB |
+| **worst, at the upper corner (3000 Hz)** | **−21.8 dB** |
+| median over 200–300 Hz, just inside the lower corner | −3.1 dB |
+
+So the panels agree in the middle of the band and disagree by up to ~20 dB at the corners. Each
+`filtfilt` pass multiplies the frequency response, so a flat mid-band stays flat while the roll-off
+skirts are effectively cubed. An analyst reading levels near their own chosen filter corners off
+the spectra panel is reading numbers well below what the spectrogram immediately above it shows.
+
+**The same routines also decrement `PARAMS.ch`** (`plot_specgram.m:22` and friends) when the LTSA
+panel is shown and multichannel mode is on — once per enabled panel. So in that configuration
+three panels display three *different channels* while all being labelled the same.
+
+**Recommendation: fix rather than reproduce**, unlike the other entries in this section. The
+behaviour is order-dependent and panel-count-dependent, so nobody can be deliberately relying on
+it; nothing written to a file depends on it; and the correct behaviour is unambiguous. It does
+change what is on screen for anyone using the display filter, so it is worth telling those users
+rather than doing it silently.
+
+**Status.** Not reproduced in the Python port: `session.frame()` computes the filtered samples
+**once** and hands the same array to every panel, which is the structural fix — panels receive data
+rather than mutating shared state. Open on the MATLAB side. Found 2026-08-23 while scoping Phase 3.
 
 ---
 

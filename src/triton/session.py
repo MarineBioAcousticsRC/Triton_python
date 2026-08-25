@@ -41,7 +41,7 @@ from __future__ import annotations
 import contextlib
 import weakref
 from collections.abc import Callable, Iterator
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, field, fields
 from pathlib import Path
 from typing import Any
 
@@ -60,6 +60,7 @@ __all__ = [
     "AppConfig",
     "SpectrogramTile",
     "LtsaTile",
+    "Frame",
     "current_session",
     "set_current_session",
     "open_session",
@@ -238,6 +239,23 @@ class ViewState(_State):
     colormap: str = "jet"
     clim: tuple[float, float] | None = None
 
+    # Display band-pass. Display only -- it never touches what is measured or written.
+    filter_on: bool = False
+    filter_low: float = 100.0
+    filter_high: float = 1000.0
+
+    # Which panels are shown. MATLAB stacks them in a fixed order regardless of the
+    # order they were switched on (plot_triton.m:44-70), so this is four flags rather
+    # than a list.
+    show_ltsa: bool = False
+    show_specgram: bool = True
+    show_timeseries: bool = False
+    show_spectra: bool = False
+
+    # Log frequency axis, as PARAMS.fax / the specgramlog control.
+    log_freq: bool = False
+    show_delimiters: bool = True
+
     _validators = {
         "tseg_sec": _positive,
         "nfft": _positive_int,
@@ -245,6 +263,8 @@ class ViewState(_State):
         "freq0": _non_negative,
         "channel": _positive_int,
         "contrast": _positive,
+        "filter_low": _non_negative,
+        "filter_high": _positive,
     }
 
 
@@ -318,6 +338,50 @@ class SpectrogramTile:
     clim: tuple[float, float]
     segment: int
     offset: int
+
+
+@dataclass(frozen=True)
+class Frame:
+    """Everything the four panels need for one window, from **one** read.
+
+    This exists for two reasons, and the second is a bug fix.
+
+    Reading a window costs a seek and a few megabytes; computing a spectrogram costs
+    thousands of FFTs. MATLAB reads once into the ``DATA`` global and each panel takes
+    what it needs from there, which is efficient. Doing the same here without a global
+    means handing the panels one object.
+
+    And in MATLAB each of ``plot_specgram``, ``plot_timeseries`` and ``plot_spectra``
+    applies the display filter to ``DATA`` **and assigns the result back**, so showing
+    three panels band-passes the data three times over; the panel drawn first sees
+    different numbers from the panel drawn last, by up to ~20 dB at the filter corners
+    (OPEN_DECISIONS §1.6). The same routines also decrement ``PARAMS.ch`` once each, so
+    in multichannel mode three panels can show three different channels. Computing
+    once and passing the result removes both by construction rather than by care.
+    """
+
+    start: np.datetime64
+    samples: np.ndarray                  # (n, n_channels), after the display filter
+    fs: int
+    spectrogram: SpectrogramTile
+    spectra_f: np.ndarray                # averaged spectrum: frequency axis
+    spectra_db: np.ndarray               # ...and its values
+    boundaries: tuple[_audio.Boundary, ...]
+    channel: int                         # 1-based, the channel every panel is showing
+
+    #: The same two arrays *before* contrast, brightness and the colour range were
+    #: applied. Kept so that changing a display knob costs a multiply rather than a
+    #: re-read and several thousand FFTs -- measured, a 30 s window at 200 kHz takes
+    #: 242 ms to compute and under a millisecond to re-map, which is the difference
+    #: between a brightness slider that works and one that does not.
+    #: :meth:`TritonSession.remap` is what consumes them.
+    raw_db: np.ndarray = field(default_factory=lambda: np.empty(0))
+    raw_spectra_db: np.ndarray = field(default_factory=lambda: np.empty(0))
+
+    @property
+    def time_axis(self) -> np.ndarray:
+        """Seconds from the left edge, as ``plot_timeseries.m:24`` computes it."""
+        return np.arange(self.samples.shape[0]) / self.fs
 
 
 @dataclass(frozen=True)
@@ -575,38 +639,107 @@ class TritonSession:
 
     # --------------------------------------------------------------------- tiles
 
-    def spectrogram_tile(self) -> SpectrogramTile:
-        """Read the current window and compute its spectrogram.
+    def frame(self) -> Frame:
+        """Read the current window once and compute everything the panels need.
 
-        Adds nothing to the Phase 1 arithmetic: this reads via ``AudioSource`` and
-        computes via ``dsp.spectrogram``, then applies brightness, contrast and the
-        held colour range. ``tests/test_session.py`` pins that equivalence.
+        The single entry point for a repaint. See :class:`Frame` for why it is one call
+        rather than one per panel.
         """
         src = self.source
         v = self.view
         start = self.audio.time
         data, boundaries = src.read_at(start, v.tseg_sec, splice_gaps=True)
 
-        freq1 = v.freq1 if v.freq1 is not None else src.sample_rate / 2
-        sg = dsp.spectrogram(
-            data[:, v.channel - 1], fs=src.sample_rate, nfft=v.nfft,
-            overlap_pct=v.overlap_pct, freq0=v.freq0, freq1=freq1,
-        )
+        # Applied once, here, to the channel being displayed -- not once per panel.
+        ch = min(v.channel, data.shape[1])
+        if v.filter_on:
+            data = data.copy()
+            data[:, ch - 1] = dsp.display_filter(
+                data[:, ch - 1], src.sample_rate, v.filter_low, v.filter_high
+            )
+        x = data[:, ch - 1]
 
-        db = sg.db
+        freq1 = v.freq1 if v.freq1 is not None else src.sample_rate / 2
+        sg = dsp.spectrogram(x, fs=src.sample_rate, nfft=v.nfft,
+                             overlap_pct=v.overlap_pct, freq0=v.freq0, freq1=freq1)
+
+        # The transfer function is calibration rather than display, so it is folded in
+        # here and treated as part of the raw values.
+        raw_db = sg.db
         tf = self.calibration.curve_for(sg.f)
         if tf is not None:
-            db = db + tf[:, None]
-        # plot_specgram.m applies brightness as a dB shift and contrast as a percentage
-        # scaling, in that order, before the colour range is taken.
-        db = db * (v.contrast / 100.0) + v.brightness
+            raw_db = raw_db + tf[:, None]
+        db = self._apply_display(raw_db)
 
-        if v.clim is None:
-            v.clim = _derive_clim(db)
-        return SpectrogramTile(
+        tile = SpectrogramTile(
             start=start, f=sg.f, t=sg.t, db=db, boundaries=tuple(boundaries),
             clim=v.clim, segment=self.audio.segment, offset=self.audio.offset,
         )
+
+        # The spectra panel is NOT a mean of the spectrogram: plot_spectra.m:32-38
+        # detrends first and then calls pwelch, so it is its own computation on the
+        # same samples. Cheap, since the samples are already in hand.
+        if x.size >= v.nfft:
+            noverlap = int(round((v.overlap_pct / 100.0) * v.nfft))
+            sp_db = dsp.welch_db(x - x.mean(), fs=src.sample_rate, nfft=v.nfft,
+                                 noverlap=noverlap)
+            sp_f = np.arange(sp_db.size) * (src.sample_rate / v.nfft)
+            if tf is not None:
+                sp_db = sp_db + self.calibration.curve_for(sp_f)
+        else:
+            sp_f = np.empty(0)
+            sp_db = np.empty(0)
+
+        return Frame(
+            start=start, samples=data, fs=src.sample_rate, spectrogram=tile,
+            spectra_f=sp_f, spectra_db=sp_db, boundaries=tuple(boundaries), channel=ch,
+            raw_db=raw_db, raw_spectra_db=sp_db,
+        )
+
+    def _apply_display(self, raw_db: np.ndarray) -> np.ndarray:
+        """Contrast, brightness, and the held colour range.
+
+        ``plot_specgram.m`` scales by contrast as a percentage and then shifts by
+        brightness in dB, in that order, before the colour range is taken. Split out
+        from :meth:`frame` so :meth:`remap` can redo just this part.
+        """
+        v = self.view
+        db = raw_db * (v.contrast / 100.0) + v.brightness
+        if v.clim is None:
+            v.clim = _derive_clim(db)
+        return db
+
+    def remap(self, frame: Frame) -> Frame:
+        """Re-apply the display mapping to an existing frame.
+
+        For when contrast, brightness or the colour range changed and nothing else did.
+        No file read and no FFT, so it is roughly three orders of magnitude cheaper
+        than :meth:`frame` on a long window -- which is what makes a brightness control
+        usable at 200 kHz. The samples, the frequency and time axes and the raw dB are
+        all reused unchanged, so this cannot disagree with the frame it came from.
+        """
+        if frame.raw_db.size == 0:
+            return self.frame()
+        old = frame.spectrogram
+        tile = SpectrogramTile(
+            start=old.start, f=old.f, t=old.t, db=self._apply_display(frame.raw_db),
+            boundaries=old.boundaries, clim=self.view.clim,
+            segment=old.segment, offset=old.offset,
+        )
+        return Frame(
+            start=frame.start, samples=frame.samples, fs=frame.fs, spectrogram=tile,
+            spectra_f=frame.spectra_f, spectra_db=frame.raw_spectra_db,
+            boundaries=frame.boundaries, channel=frame.channel,
+            raw_db=frame.raw_db, raw_spectra_db=frame.raw_spectra_db,
+        )
+
+    def spectrogram_tile(self) -> SpectrogramTile:
+        """The spectrogram alone.  Convenience over :meth:`frame`.
+
+        Kept because it is the narrow thing most callers and tests want, and because
+        the Phase 2 equivalence tests are written against it.
+        """
+        return self.frame().spectrogram
 
     def ltsa_tile(self) -> LtsaTile:
         """Read the current LTSA window."""

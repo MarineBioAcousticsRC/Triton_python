@@ -72,15 +72,19 @@ def test_milestone_open_seek_and_retrieve_both_tiles(generated_dir: Path):
     assert lt.db.shape[0] == lt.f.size
     assert lt.db.size > 0
 
-    # Checked two ways, because sys.modules alone is a weak guard: a toolkit that is
-    # not installed cannot appear there, so the test would pass for the wrong reason on
-    # a machine without Qt. Scanning the source is always meaningful.
+    # Checked by scanning the module's own imports, NOT by looking at sys.modules.
+    #
+    # This started out doing both. The sys.modules half was wrong twice over: a toolkit
+    # that is not installed cannot appear there, so it passed for the wrong reason on a
+    # machine without Qt -- and once tests/test_gui.py existed it started *failing* for
+    # the wrong reason too, because pytest runs both in one process and any GUI test
+    # legitimately puts PySide6 in sys.modules. It could never distinguish "the session
+    # imported Qt" from "something else in this process did".
+    #
+    # The AST scan answers the actual question and is unaffected by what else has run.
     import ast
-    import sys
 
     gui = {"PySide6", "PyQt5", "PyQt6", "matplotlib", "tkinter", "pyqtgraph"}
-    loaded = gui & set(sys.modules)
-    assert not loaded, f"a GUI toolkit got imported: {sorted(loaded)}"
 
     import triton.session as mod
     tree = ast.parse(Path(mod.__file__).read_text(encoding="utf-8"))

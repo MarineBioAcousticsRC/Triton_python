@@ -107,6 +107,7 @@ class ControlPanel(QWidget):
 
         root = QVBoxLayout(self)
         root.setSpacing(8)
+        root.addWidget(self._cursor_group())
         root.addWidget(self._time_group())
         root.addWidget(self._display_group())
         root.addWidget(self._spectrogram_group())
@@ -151,6 +152,30 @@ class ControlPanel(QWidget):
         return w
 
     # --------------------------------------------------------------------- groups
+
+    def _cursor_group(self) -> QGroupBox:
+        """Where the cursor readout lands.  ``coorddisp.m`` puts it in this window too.
+
+        A fixed set of rows rather than rows added and removed per panel type: the
+        readout changes as the pointer crosses between panels, and a control panel that
+        reflows on mouse-move is unusable. Irrelevant rows are blanked, not hidden.
+        """
+        box = QGroupBox("Cursor")
+        form = QFormLayout(box)
+        self.cursor_rows: dict[str, QLabel] = {}
+        for key in ("Time", "Frequency", "Spectrum level [dB]", "Counts", "Raw file",
+                    "File"):
+            lab = QLabel("--")
+            lab.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            form.addRow(key, lab)
+            self.cursor_rows[key] = lab
+        return box
+
+    def show_readout(self, readout) -> None:
+        """Display a :class:`~triton.session.Readout`, blanking what does not apply."""
+        values = dict(readout.lines())
+        for key, lab in self.cursor_rows.items():
+            lab.setText(values.get(key, "--"))
 
     def _time_group(self) -> QGroupBox:
         box = QGroupBox("Time")

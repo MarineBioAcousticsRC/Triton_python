@@ -89,6 +89,10 @@ class MainWindow(QMainWindow):
         self.setStatusBar(QStatusBar())
         self._build_menus()
 
+        for panel in self.panels.values():
+            panel.hovered.connect(self._on_hover)
+            panel.picked.connect(self._on_pick)
+
         self.bridge.repaint_needed.connect(self._repaint)
         self._frame = None
         self._apply_layout()
@@ -251,6 +255,59 @@ class MainWindow(QMainWindow):
                 self.statusBar().showMessage(str(exc), 8000)
 
         self.controls._refresh_readouts()
+
+    # ---------------------------------------------------------------------- cursor
+
+    def _on_hover(self, kind: str, x: float, y: float) -> None:
+        """Update the readout for whichever panel the pointer is over."""
+        try:
+            if kind == "ltsa":
+                if not self.session.ltsa.is_open:
+                    return
+                readout = self.session.probe_ltsa(self.session.ltsa_tile(), x, y)
+            else:
+                if self._frame is None:
+                    return
+                readout = self.session.probe(self._frame, kind, x, y)
+        except Exception:                             # noqa: BLE001
+            # Hover fires continuously, including over a window that cannot currently
+            # be read. Failing silently is right here -- an error message per mouse
+            # movement would bury everything else in the status bar.
+            return
+        self.controls.show_readout(readout)
+
+    def _on_pick(self, kind: str, x: float, y: float) -> None:
+        """A click. On the LTSA it opens the audio behind the point."""
+        if kind != "ltsa" or not self.session.ltsa.is_open:
+            return
+        try:
+            t = self.session.open_from_ltsa(x)
+        except FileNotFoundError as exc:
+            # The LTSA names the file; it just is not where the LTSA is. Offer to find
+            # it, which is what pickxwav.m does inline.
+            self.statusBar().showMessage(str(exc), 10000)
+            if not self.modal_errors:
+                return
+            name, _ = QFileDialog.getOpenFileName(
+                self, "Locate the audio file named by this LTSA",
+                str(self.session.config.last_audio_dir or Path.cwd()),
+                "Audio (*.x.wav *.wav *.flac);;All files (*)",
+            )
+            if not name:
+                return
+            try:
+                t = self.session.open_from_ltsa(
+                    x, search_dirs=[Path(name).parent]
+                )
+            except Exception as exc2:                 # noqa: BLE001
+                self.report_error("Could not open the audio", str(exc2))
+                return
+        except Exception as exc:                      # noqa: BLE001
+            self.report_error("Could not open the audio", str(exc))
+            return
+        self.statusBar().showMessage(
+            f"{self.session.audio.path.name} at {t}", 6000
+        )
 
     def closeEvent(self, event) -> None:              # noqa: N802 -- Qt naming
         self.bridge.detach()

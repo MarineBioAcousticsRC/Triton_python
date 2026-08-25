@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import numpy as np
 import pyqtgraph as pg
-from PySide6.QtCore import QRectF, Qt
+from PySide6.QtCore import QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QPen
 from PySide6.QtWidgets import QWidget
 
@@ -77,11 +77,18 @@ def colormap_lut(name: str, n: int = 256) -> np.ndarray:
 
 
 class _Panel(pg.PlotWidget):
-    """Shared axis setup.  Not a panel on its own."""
+    """Shared axis setup and mouse reporting.  Not a panel on its own."""
 
     #: Shown as the y-axis label and used in the panel's title.
     y_label = ""
     y_units = ""
+    #: Which panel this is, in the session's vocabulary.
+    kind = ""
+
+    #: ``(kind, x, y)`` in data coordinates. Hover drives the readout; click drives
+    #: actions -- on the LTSA, opening the audio behind the point.
+    hovered = Signal(str, float, float)
+    picked = Signal(str, float, float)
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent=parent)
@@ -90,6 +97,27 @@ class _Panel(pg.PlotWidget):
         self.getPlotItem().setLabel("left", self.y_label, units=self.y_units or None)
         self.getPlotItem().getViewBox().setMouseEnabled(x=False, y=False)
         self._boundary_lines: list[pg.InfiniteLine] = []
+
+        self.scene().sigMouseMoved.connect(self._mouse_moved)
+        self.scene().sigMouseClicked.connect(self._mouse_clicked)
+
+    def _to_data(self, scene_pos) -> tuple[float, float] | None:
+        """Scene coordinates to data coordinates, or None if outside the plot."""
+        vb = self.getPlotItem().getViewBox()
+        if not self.getPlotItem().sceneBoundingRect().contains(scene_pos):
+            return None
+        p = vb.mapSceneToView(scene_pos)
+        return float(p.x()), float(p.y())
+
+    def _mouse_moved(self, pos) -> None:
+        at = self._to_data(pos)
+        if at is not None:
+            self.hovered.emit(self.kind, at[0], at[1])
+
+    def _mouse_clicked(self, event) -> None:
+        at = self._to_data(event.scenePos())
+        if at is not None:
+            self.picked.emit(self.kind, at[0], at[1])
 
     def _draw_boundaries(self, offsets: list[float], x_max: float) -> None:
         """Red dashed lines where a raw file ends -- ``plot_specgram.m:116-122``.
@@ -147,6 +175,8 @@ class _ImagePanel(_Panel):
 class SpectrogramPanel(_ImagePanel):
     """The main event.  Port of ``plot_specgram.m``."""
 
+    kind = "specgram"
+
     def render(self, frame: Frame, colormap: str = "jet", log_freq: bool = False,
                delimiters: bool = True) -> None:
         tile = frame.spectrogram
@@ -161,6 +191,8 @@ class SpectrogramPanel(_ImagePanel):
 class LtsaPanel(_ImagePanel):
     """The long-term view.  Port of ``plot_ltsa.m``."""
 
+    kind = "ltsa"
+
     def render(self, tile: LtsaTile, colormap: str = "jet") -> None:
         x_max = float(tile.t[-1]) if tile.t.size else 1.0
         self._show(tile.db, x_max, tile.f, tile.clim, colormap, log_freq=False)
@@ -169,6 +201,8 @@ class LtsaPanel(_ImagePanel):
 
 class TimeSeriesPanel(_Panel):
     """Raw waveform.  Port of ``plot_timeseries.m``."""
+
+    kind = "timeseries"
 
     y_label = "Amplitude"
     y_units = "counts"
@@ -202,6 +236,8 @@ class SpectraPanel(_Panel):
     calls ``pwelch``, which is a different estimate. The session computes it separately
     on the same samples.
     """
+
+    kind = "spectra"
 
     y_label = "Spectrum level"
     y_units = "dB"

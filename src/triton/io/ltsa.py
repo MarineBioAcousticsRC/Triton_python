@@ -416,6 +416,60 @@ class LtsaSource:
             vals = padded
         return vals.reshape((nf, cols), order="F")
 
+    def locate(self, start: np.datetime64, hours_from_left: float,
+               hours: float) -> tuple[int, int, np.datetime64]:
+        """Which entry and time bin a point in a plotted window falls in.
+
+        Port of ``getIndexBin.m``. Returns ``(entry index, 0-based bin within that
+        entry, the bin's centre time)``.
+
+        The walk is the point. An LTSA plot's x axis is bins, laid side by side with
+        no gaps, but consecutive entries can be separated by hours of duty-cycle
+        silence -- so x maps to time **piecewise**, one linear stretch per raw file,
+        and a naive ``start + x`` is wrong by the accumulated gap for any point after
+        the first boundary. This consumes ``n_ave`` bins per entry until the requested
+        bin is inside one.
+
+        The half-bin offset matches ``getIndexBin.m:21``: the plot is an image whose
+        first column is *centred* on the first bin, so a click at x=0 is the middle of
+        bin 0 rather than its leading edge. Clamps at the last entry rather than
+        raising, because a click a pixel past the end of the data is an ordinary thing
+        for a user to do.
+        """
+        tbinsz = self.header.tave / 3600.0
+        if tbinsz <= 0:
+            raise ValueError(f"{self.path.name}: tave is {self.header.tave}")
+        n_bins = self.bins_for(hours)
+        cursor = int(np.floor(hours_from_left / tbinsz))
+        cursor = max(0, min(cursor, max(n_bins - 1, 0)))
+
+        index, first_bin = self.entry_containing(start)
+        # entry_containing returns the entry; the bin the window starts at within it
+        # is derived the same way read_block derives it.
+        tave_ns = int(round(self.header.tave * _NS_PER_SEC))
+        e = self.header.entries[index]
+        start_bin = (int(np.datetime64(first_bin, "ns").astype("int64"))
+                     - e.start_ns) // tave_ns
+
+        remaining = self.header.entries[index].n_ave - start_bin
+        if cursor < remaining:
+            bin_in_entry = start_bin + cursor
+        else:
+            cursor -= remaining
+            index += 1
+            while (index < len(self.header.entries)
+                   and cursor >= self.header.entries[index].n_ave):
+                cursor -= self.header.entries[index].n_ave
+                index += 1
+            if index >= len(self.header.entries):
+                index = len(self.header.entries) - 1
+                cursor = self.header.entries[index].n_ave - 1
+            bin_in_entry = cursor
+
+        entry = self.header.entries[index]
+        centre_ns = entry.start_ns + int(round((bin_in_entry + 0.5) * tave_ns))
+        return index, bin_in_entry, np.datetime64(centre_ns, "ns")
+
     def bin_times_hours(self, hours: float) -> np.ndarray:
         """Bin centres in hours from the window's left edge.
 

@@ -410,3 +410,81 @@ def test_an_unreadable_window_keeps_the_last_good_frame(win, app):
 
     assert win._frame is good, "the last good frame should still be on screen"
     assert win.statusBar().currentMessage() != ""
+
+
+# ------------------------------------------------------------- cursor and LTSA click
+
+
+def test_hovering_a_panel_updates_the_readout(win, app):
+    win.session.view.tseg_sec = 1.0
+    win.bridge.force()
+    app.processEvents()
+
+    win.panels["specgram"].hovered.emit("specgram", 0.5, 2000.0)
+    rows = win.controls.cursor_rows
+    assert rows["Time"].text() != "--"
+    assert "Hz" in rows["Frequency"].text()
+    assert rows["Spectrum level [dB]"].text() != "--"
+
+
+def test_the_readout_blanks_rows_that_do_not_apply(win, app):
+    """Rows are blanked rather than hidden: a control panel that reflows on
+    mouse-move, as the pointer crosses between panels, is unusable."""
+    win.bridge.force()
+    app.processEvents()
+
+    win.panels["specgram"].hovered.emit("specgram", 0.5, 2000.0)
+    assert win.controls.cursor_rows["Spectrum level [dB]"].text() != "--"
+
+    win.panels["timeseries"].hovered.emit("timeseries", 0.5, 0.0)
+    assert win.controls.cursor_rows["Counts"].text() != "--"
+    assert win.controls.cursor_rows["Spectrum level [dB]"].text() == "--"
+
+
+def test_hover_is_silent_when_there_is_nothing_to_report(win, app):
+    """Hover fires continuously, including over an unreadable window. An error message
+    per mouse movement would bury everything else in the status bar."""
+    win.session.close()
+    app.processEvents()
+    win.panels["specgram"].hovered.emit("specgram", 0.5, 2000.0)   # must not raise
+    win.panels["ltsa"].hovered.emit("ltsa", 0.001, 1000.0)
+
+
+def test_clicking_the_ltsa_opens_the_audio_behind_it(win, app, generated_dir: Path):
+    win.session.close()
+    win.session.open_ltsa(generated_dir / LTSA)
+    win.session.ltsa.tseg_hr = 1 / 60
+    app.processEvents()
+    assert not win.session.audio.is_open
+
+    win.panels["ltsa"].picked.emit("ltsa", 3.6 / 3600, 1000.0)
+    app.processEvents()
+
+    assert win.session.audio.is_open
+    assert win.session.audio.path.name == XWAV
+    assert win.session.view.show_specgram
+    assert win.panels["specgram"].isVisible()
+
+
+def test_clicking_a_non_ltsa_panel_does_not_open_anything(win, app, generated_dir):
+    win.session.open_ltsa(generated_dir / LTSA)
+    before = win.session.audio.path
+    win.panels["specgram"].picked.emit("specgram", 0.5, 2000.0)
+    app.processEvents()
+    assert win.session.audio.path == before
+
+
+def test_a_missing_audio_file_reports_rather_than_raising(win, app, tmp_path: Path,
+                                                          generated_dir: Path):
+    import shutil
+    moved = tmp_path / LTSA
+    shutil.copy(generated_dir / LTSA, moved)          # no .x.wav beside it
+
+    win.session.close()
+    win.session.open_ltsa(moved)
+    app.processEvents()
+    win.panels["ltsa"].picked.emit("ltsa", 0.0, 1000.0)
+    app.processEvents()
+
+    msg = win.statusBar().currentMessage()
+    assert XWAV in msg, f"the message must name the file it wanted: {msg!r}"

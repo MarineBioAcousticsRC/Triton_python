@@ -61,6 +61,7 @@ __all__ = [
     "SpectrogramTile",
     "LtsaTile",
     "Frame",
+    "Readout",
     "current_session",
     "set_current_session",
     "open_session",
@@ -393,6 +394,38 @@ class LtsaTile:
     t: np.ndarray                        # hours from the left edge
     db: np.ndarray                       # (n_freq, n_bins)
     clim: tuple[float, float]
+
+
+@dataclass(frozen=True)
+class Readout:
+    """What the cursor is over.  The port of ``coorddisp.m``'s readout half.
+
+    Computed in the session rather than in the widget, so it can be tested without a
+    display and so a Remora can ask the same question the cursor asks.
+    """
+
+    panel: str                          # 'specgram' | 'timeseries' | 'spectra' | 'ltsa'
+    time: np.datetime64 | None = None
+    frequency: float | None = None       # Hz
+    value: float | None = None           # dB, or counts on the time series
+    value_label: str = ""
+    segment: int | None = None           # raw file the point falls in, 0-based
+    source_file: str | None = None        # for LTSA picks: the audio file it came from
+
+    def lines(self) -> list[tuple[str, str]]:
+        """Label/text pairs, formatted as ``coorddisp.m`` formats them."""
+        out: list[tuple[str, str]] = []
+        if self.time is not None:
+            out.append(("Time", str(self.time)))
+        if self.frequency is not None:
+            out.append(("Frequency", f"{self.frequency:.1f} Hz"))
+        if self.value is not None:
+            out.append((self.value_label or "Value", f"{self.value:.1f}"))
+        if self.segment is not None:
+            out.append(("Raw file", str(self.segment + 1)))     # 1-based, as MATLAB
+        if self.source_file:
+            out.append(("File", self.source_file))
+        return out
 
 
 # ----------------------------------------------------------------------- session
@@ -758,6 +791,132 @@ class TritonSession:
         db = db * (st.contrast / 100.0) + st.brightness
         return LtsaTile(start=start, f=f, t=src.bin_times_hours(st.tseg_hr),
                         db=db, clim=_derive_clim(db))
+
+    # ------------------------------------------------------------------- the cursor
+
+    def time_at(self, x_sec: float) -> tuple[np.datetime64, int]:
+        """Wall-clock time ``x_sec`` into the current window, and its raw file.
+
+        Not ``window start + x``. The window is read byte-contiguously across raw-file
+        boundaries, so on duty-cycled data x is continuous while time jumps -- a point
+        after a boundary is later than the naive sum by the whole gap.
+        ``coorddisp.m``'s ``get_time_xwav`` handles this by walking the delimiter list;
+        this walks the actual segment lengths, which is the same idea done from the
+        source data.
+
+        More accurate than the MATLAB in one respect: ``readseg.m:129-131``
+        extrapolates its delimiters at a fixed spacing taken from raw file 1, and its
+        own comment says it is "assuming that all raw files are the same length". When
+        they are not, MATLAB's readout drifts after the second boundary and this does
+        not. Same answer whenever the assumption holds.
+        """
+        src = self.source
+        k = int(np.floor(x_sec * src.sample_rate))
+        seg = self.audio.segment
+        off = self.audio.offset + k
+        while seg < len(src.segments) - 1 and off >= src.segments[seg].n_samples:
+            off -= src.segments[seg].n_samples
+            seg += 1
+        ns = int(round(off * 1e9 / src.sample_rate))
+        return src.segments[seg].start + np.timedelta64(ns, "ns"), seg
+
+    def probe(self, frame: Frame, panel: str, x: float, y: float) -> Readout:
+        """What is at ``(x, y)`` in one of the audio panels.
+
+        ``x`` is seconds from the left edge; ``y`` is Hz for the spectrogram, counts
+        for the time series, and Hz for the spectra panel.
+        """
+        t, seg = self.time_at(x)
+        if panel == "timeseries":
+            n = int(round(x * frame.fs))
+            n = max(0, min(n, frame.samples.shape[0] - 1))
+            return Readout("timeseries", time=t,
+                           value=float(frame.samples[n, frame.channel - 1]),
+                           value_label="Counts", segment=seg)
+
+        if panel == "spectra":
+            f, db = frame.spectra_f, frame.spectra_db
+            if f.size == 0:
+                return Readout("spectra", time=t, segment=seg)
+            j = int(np.argmin(np.abs(f - y)))
+            return Readout("spectra", time=t, frequency=float(f[j]),
+                           value=float(db[j]), value_label="Spectrum level [dB]",
+                           segment=seg)
+
+        tile = frame.spectrogram
+        # Nearest bin in each axis, as coorddisp.m:307-314 does with its floor(+half)
+        # arithmetic. Expressed as a nearest-neighbour search because the axes are
+        # already in hand and that cannot go out of range.
+        if tile.f.size == 0 or tile.t.size == 0:
+            return Readout("specgram", time=t, segment=seg)
+        j = int(np.argmin(np.abs(tile.f - y)))
+        i = int(np.argmin(np.abs(tile.t - x)))
+        return Readout("specgram", time=t, frequency=float(tile.f[j]),
+                       value=float(tile.db[j, i]),
+                       value_label="Spectrum level [dB]", segment=seg)
+
+    def probe_ltsa(self, tile: LtsaTile, x_hr: float, y_hz: float) -> Readout:
+        """What is at ``(x, y)`` in the LTSA panel."""
+        if self.ltsa.source is None:
+            raise RuntimeError("no LTSA open")
+        src = self.ltsa.source
+        start = self.ltsa.position or src.start_time
+        index, _bin, t = src.locate(start, x_hr, self.ltsa.tseg_hr)
+        entry = src.header.entries[index]
+
+        value = None
+        if tile.f.size and tile.t.size:
+            j = int(np.argmin(np.abs(tile.f - y_hz)))
+            i = int(np.argmin(np.abs(tile.t - x_hr)))
+            if j < tile.db.shape[0] and i < tile.db.shape[1]:
+                value = float(tile.db[j, i])
+        return Readout("ltsa", time=t,
+                       frequency=float(tile.f[int(np.argmin(np.abs(tile.f - y_hz)))])
+                       if tile.f.size else None,
+                       value=value, value_label="Spectrum level [dB]",
+                       segment=index, source_file=entry.filename)
+
+    def open_from_ltsa(self, x_hr: float, *, search_dirs: list[Path] | None = None
+                       ) -> np.datetime64:
+        """Open the audio file behind a point in the LTSA and seek to it.
+
+        Port of ``pickxwav.m``, and the reason it works at all is that an LTSA is a
+        self-describing index: each directory entry records which audio file its raw
+        file came from and when that raw file started, so no searching or filename
+        parsing is needed.
+
+        Returns the time sought to. Raises ``FileNotFoundError`` naming the file when
+        it cannot be found, so a caller can offer a file dialog -- which is what
+        ``pickxwav.m`` does inline, and which does not belong this far down.
+        """
+        if self.ltsa.source is None:
+            raise RuntimeError("no LTSA open")
+        src = self.ltsa.source
+        start = self.ltsa.position or src.start_time
+        index, _bin, t = src.locate(start, x_hr, self.ltsa.tseg_hr)
+        entry = src.header.entries[index]
+
+        candidates = [src.path.parent, *(search_dirs or [])]
+        if self.config.last_audio_dir:
+            candidates.append(self.config.last_audio_dir)
+        for d in candidates:
+            candidate = Path(d) / entry.filename
+            if candidate.exists():
+                with self.batch():
+                    if (self.audio.path is None
+                            or self.audio.path.name != entry.filename):
+                        self.open_audio(candidate)
+                    self.seek(t)
+                    if not self.view.show_specgram:
+                        # pickxwav.m:82-83 turns the spectrogram on when nothing that
+                        # could show the audio is enabled. Landing on a blank window
+                        # after a click reads as the click having failed.
+                        self.view.show_specgram = True
+                return t
+        raise FileNotFoundError(
+            f"{entry.filename} is named by {src.path.name} but was not found in "
+            f"{', '.join(str(d) for d in candidates)}"
+        )
 
     # -------------------------------------------------------- inspection surfaces
 

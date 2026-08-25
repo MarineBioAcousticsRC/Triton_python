@@ -507,3 +507,120 @@ def test_manual_clim_survives_stepping(s: TritonSession):
     s.view.clim = (-20.0, 40.0)
     s.step(+1)
     assert s.spectrogram_tile().clim == (-20.0, 40.0)
+
+
+# ------------------------------------------------- cursor readout and LTSA click-through
+
+
+def test_time_at_is_piecewise_across_a_duty_cycle_gap(generated_dir: Path):
+    """The thing a naive `window start + x` gets wrong, and by a lot.
+
+    The window is read byte-contiguously across raw-file boundaries, so x is continuous
+    while wall-clock time jumps. On the duty fixture the gap is 7.5 s, so a readout
+    using the naive form reports a time seven and a half seconds early for any point
+    past the boundary -- which is not a rounding error, it is the wrong recording.
+    """
+    sess = TritonSession()
+    sess.open_audio(generated_dir / DUTY)
+    src = sess.audio.source
+    sess.view.tseg_sec = 0.5
+    sess.seek_samples(0, int(2.25 * src.sample_rate))
+
+    # Before the boundary the two agree...
+    naive = sess.audio.time + np.timedelta64(100_000_000, "ns")
+    got, seg = sess.time_at(0.1)
+    assert got == naive and seg == 0
+
+    # ...and after it they do not.
+    got, seg = sess.time_at(0.4)
+    naive = sess.audio.time + np.timedelta64(400_000_000, "ns")
+    assert seg == 1, "past the boundary is the next raw file"
+    assert got != naive
+    assert got == src.segments[1].start + np.timedelta64(150_000_000, "ns")
+
+
+def test_probe_reports_the_value_under_the_cursor(generated_dir: Path):
+    sess = TritonSession()
+    sess.open_audio(generated_dir / XWAV)
+    sess.view.tseg_sec = 1.0
+    sess.view.nfft = 256
+    frame = sess.frame()
+
+    sg = sess.probe(frame, "specgram", 0.5, 2000.0)
+    assert sg.panel == "specgram"
+    assert sg.frequency is not None and abs(sg.frequency - 2000.0) < 100
+    # the reported level must be the array value at the reported bin, not interpolated
+    j = int(np.argmin(np.abs(frame.spectrogram.f - sg.frequency)))
+    i = int(np.argmin(np.abs(frame.spectrogram.t - 0.5)))
+    assert sg.value == frame.spectrogram.db[j, i]
+
+    ts = sess.probe(frame, "timeseries", 0.5, 0.0)
+    assert ts.value_label == "Counts"
+    assert ts.value == frame.samples[int(0.5 * frame.fs), 0]
+
+
+def test_probe_does_not_run_off_the_end(generated_dir: Path):
+    """Hover fires for every pixel, including the last one."""
+    sess = TritonSession()
+    sess.open_audio(generated_dir / XWAV)
+    sess.view.tseg_sec = 1.0
+    frame = sess.frame()
+    for x in (0.0, 0.99999, 1.0, 1.5):
+        for panel in ("specgram", "timeseries", "spectra"):
+            sess.probe(frame, panel, x, 1000.0)      # must not raise
+
+
+def test_ltsa_locate_walks_entries(generated_dir: Path):
+    """getIndexBin.m's walk: x maps to a bin, bins are consumed entry by entry."""
+    sess = TritonSession()
+    sess.open_ltsa(generated_dir / LTSA)
+    src = sess.ltsa.source
+    tave, nave = src.header.tave, src.header.n_ave[0]
+    assert nave == 3 and tave == 1.0, "fixture assumption"
+
+    # 3 bins of 1 s per entry, so 3.6 s into the plot is entry 1, bin 0.
+    idx, b, t = src.locate(src.start_time, 3.6 / 3600, 1 / 60)
+    assert (idx, b) == (1, 0)
+    assert t == src.header.entries[1].start + np.timedelta64(500, "ms"), "bin centre"
+
+    idx, b, _ = src.locate(src.start_time, 7.2 / 3600, 1 / 60)
+    assert (idx, b) == (2, 1)
+
+
+def test_ltsa_locate_clamps_past_the_end(generated_dir: Path):
+    """A click a pixel beyond the data is an ordinary thing for a user to do."""
+    sess = TritonSession()
+    sess.open_ltsa(generated_dir / LTSA)
+    src = sess.ltsa.source
+    idx, b, _ = src.locate(src.start_time, 999.0, 1 / 60)
+    assert idx == len(src.header.entries) - 1
+    assert b == src.header.entries[idx].n_ave - 1
+
+
+def test_open_from_ltsa_opens_the_named_file_and_seeks(generated_dir: Path):
+    """pickxwav.m's job. The LTSA names its own source files, so nothing is searched."""
+    sess = TritonSession()
+    sess.open_ltsa(generated_dir / LTSA)
+    sess.ltsa.tseg_hr = 1 / 60
+    assert not sess.audio.is_open
+
+    t = sess.open_from_ltsa(3.6 / 3600)
+
+    assert sess.audio.is_open
+    assert sess.audio.path.name == XWAV
+    assert sess.audio.time == t
+    assert sess.view.show_specgram, "landing on a blank window reads as a failed click"
+    assert sess.frame().spectrogram.db.size > 0, "and the position must be readable"
+
+
+def test_open_from_ltsa_names_the_file_it_could_not_find(tmp_path: Path,
+                                                         generated_dir: Path):
+    """The error has to name the file, because the caller offers a file dialog next."""
+    import shutil
+    moved = tmp_path / LTSA
+    shutil.copy(generated_dir / LTSA, moved)          # ...without the .x.wav beside it
+
+    sess = TritonSession()
+    sess.open_ltsa(moved)
+    with pytest.raises(FileNotFoundError, match=XWAV.replace(".", r"\.")):
+        sess.open_from_ltsa(0.0)

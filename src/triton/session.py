@@ -50,6 +50,7 @@ import numpy as np
 from . import dsp
 from .io import audio as _audio
 from .io import ltsa as _ltsa
+from .timebase import _to_datetime64
 
 __all__ = [
     "TritonSession",
@@ -68,6 +69,15 @@ __all__ = [
 ]
 
 _MISSING = object()
+
+#: The time formats :meth:`TritonSession.parse_time_input` accepts, in one place so the
+#: error message and the widget's tooltip cannot drift apart.
+_TIME_FORMS = (
+    "  2018-03-15T23:57:02.5   full date and time\n"
+    "  23:57:02.172            time only, date from the current position\n"
+    "  +90  or  -12.5          seconds relative to the current position\n"
+    "  @1234.5                 seconds from the start of the file"
+)
 
 
 # --------------------------------------------------------------------- validation
@@ -791,6 +801,82 @@ class TritonSession:
         db = db * (st.contrast / 100.0) + st.brightness
         return LtsaTile(start=start, f=f, t=src.bin_times_hours(st.tseg_hr),
                         db=db, clim=_derive_clim(db))
+
+    # --------------------------------------------------------------- typed times
+
+    def parse_time_input(self, text: str) -> np.datetime64:
+        """Interpret a typed time against the open file.
+
+        Deliberately forgiving, because the strings people have to hand come from
+        detection logs, spreadsheets, emails and papers, in whatever format the tool
+        that produced them used. All of these work::
+
+            2018-03-15T23:57:02.5     full, ISO
+            2018-03-15 23:57:02       space instead of T
+            23:57:02.172              time only -- takes the date from the position
+            +90        -12.5          seconds relative to where we are now
+            @1234.5                   seconds from the start of the file
+
+        Raises ``ValueError`` with the list above when nothing matches, since a typed
+        value that silently does nothing is worse than one that explains itself.
+        """
+        import re
+        from datetime import datetime
+
+        if not self.audio.is_open:
+            raise ValueError("no audio open")
+        text = text.strip()
+        if not text:
+            raise ValueError("nothing entered")
+
+        # Relative, signed: the common case when reading down a list of offsets.
+        if text[0] in "+-":
+            try:
+                return self.audio.time + np.timedelta64(
+                    int(round(float(text) * 1e9)), "ns"
+                )
+            except ValueError:
+                raise ValueError(f"{text!r} is not a number of seconds") from None
+
+        # Absolute seconds from the start of the file.
+        if text.startswith("@"):
+            try:
+                offset = float(text[1:])
+            except ValueError:
+                raise ValueError(f"{text[1:]!r} is not a number of seconds") from None
+            return self.source.start + np.timedelta64(int(round(offset * 1e9)), "ns")
+
+        iso = text.replace(" ", "T", 1) if " " in text else text
+        # Time only -- borrow the date from where we are, which is what someone reading
+        # a within-file timestamp off a log means.
+        if re.fullmatch(r"\d{1,2}:\d{2}(:\d{2}(\.\d+)?)?", text):
+            day = str(self.audio.time.astype("datetime64[D]"))
+            iso = f"{day}T{text}"
+
+        try:
+            return _to_datetime64(datetime.fromisoformat(iso))
+        except ValueError:
+            raise ValueError(
+                f"could not read {text!r} as a time. Accepted forms:\n{_TIME_FORMS}"
+            ) from None
+
+    def seek_text(self, text: str) -> np.datetime64:
+        """Parse a typed time and seek to it.  Returns where it landed.
+
+        Clamps into the file rather than refusing, and says so via the return value:
+        a time typed from a log may be a second outside this file's span, and jumping to
+        the nearest readable point is more useful than an error.
+        """
+        t = self.parse_time_input(text)
+        src = self.source
+        if t < src.start:
+            t = src.start
+        try:
+            self.seek(t)
+        except _audio.TimeNotInData:
+            last = len(src.segments) - 1
+            self.seek_samples(last, self._max_start_offset(last))
+        return self.audio.time
 
     # ------------------------------------------------------------------- the cursor
 

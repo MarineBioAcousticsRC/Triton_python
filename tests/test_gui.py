@@ -488,3 +488,60 @@ def test_a_missing_audio_file_reports_rather_than_raising(win, app, tmp_path: Pa
 
     msg = win.statusBar().currentMessage()
     assert XWAV in msg, f"the message must name the file it wanted: {msg!r}"
+
+
+def test_the_goto_box_moves_the_session(win, app):
+    win.controls.goto_edit.setText("@3.5")
+    win.controls._goto_typed()
+    app.processEvents()
+    expected = win.session.source.start + np.timedelta64(3500, "ms")
+    assert win.session.audio.time == expected
+
+
+def test_a_bad_goto_entry_reports_and_keeps_the_text(win, app):
+    """Mid-flow typing: a status message and a tinted box, not a modal dialog."""
+    win.controls.goto_edit.setText("last tuesday")
+    win.controls._goto_typed()
+    app.processEvents()
+    assert win.controls.goto_edit.text() == "last tuesday", "text must be correctable"
+    assert win.statusBar().currentMessage() != ""
+
+
+def test_toggling_a_panel_off_and_on_restores_its_height(win, app):
+    """A QSplitter gives a re-shown widget a near-zero height, so a toggled panel used
+    to come back as a sliver needing a manual drag."""
+    with win.session.batch():
+        win.session.view.show_specgram = True
+        win.session.view.show_timeseries = True
+    app.processEvents()
+    before = dict(zip(PANEL_ORDER, win.splitter.sizes(), strict=False))
+    assert before["timeseries"] > 50, "fixture assumption: it starts with real height"
+
+    win.session.view.show_timeseries = False
+    app.processEvents()
+    win.session.view.show_timeseries = True
+    app.processEvents()
+
+    after = dict(zip(PANEL_ORDER, win.splitter.sizes(), strict=False))
+    # Within a few pixels rather than exact: a QSplitter redistributes handle widths
+    # when the visible set changes, so the restored height lands close but not equal.
+    # The bug being guarded against returned single-digit heights, so the tolerance has
+    # plenty of room to catch a regression.
+    assert abs(after["timeseries"] - before["timeseries"]) <= 6, (
+        f"{after['timeseries']} vs {before['timeseries']}"
+    )
+
+
+def test_log_frequency_does_not_produce_absurd_axis_limits(win, app):
+    """The 10**273 bug: setting log mode on a linearly spaced image asks the axis to
+    read 0 Hz as 10**0 and 100 kHz as 10**100000."""
+    win.session.view.nfft = 256
+    win.session.view.log_freq = True
+    app.processEvents()
+    win.bridge.force()
+    app.processEvents()
+
+    y0, y1 = win.panels["specgram"].getPlotItem().getViewBox().viewRange()[1]
+    # In log mode the range is in log10 units, so a sane audio band is single digits.
+    assert -3 < y0 < 6 and -3 < y1 < 6, f"log y range is {(y0, y1)}"
+    assert y1 > y0

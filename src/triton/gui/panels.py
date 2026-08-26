@@ -23,6 +23,7 @@ from PySide6.QtCore import QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QPen
 from PySide6.QtWidgets import QWidget
 
+from .. import dsp
 from ..session import Frame, LtsaTile
 
 __all__ = [
@@ -158,18 +159,52 @@ class _ImagePanel(_Panel):
             self._lut_name = name
 
     def _show(self, db: np.ndarray, x_max: float, f: np.ndarray,
-              clim: tuple[float, float], colormap: str, log_freq: bool) -> None:
+              clim: tuple[float, float], colormap: str, log_freq: bool,
+              fs: float | None = None, nfft: int | None = None) -> None:
         self._set_colormap(colormap)
+
+        if log_freq and fs and nfft and f.size > 4:
+            # An ImageItem is drawn on a uniform grid, and pyqtgraph's log mode means
+            # the coordinates *are* log10 values. So the rows have to be resampled onto
+            # a grid that is uniform in log10(f) before the axis is switched over --
+            # simply setting log mode on a linearly spaced image asks the axis to read
+            # 0 Hz as 10**0 and 100 kHz as 10**100000, which is where the 10**273 tick
+            # labels came from.
+            db, f = self._to_log_rows(db, f, fs, nfft)
+            y0, y1 = float(np.log10(f[0])), float(np.log10(f[-1]))
+        else:
+            y0 = float(f[0]) if f.size else 0.0
+            y1 = float(f[-1]) if f.size else 1.0
+            log_freq = False
+
         # NaN reads as "no data here" -- a duty-cycle gap in gap-aware mode, or a
         # truncated LTSA. Left transparent rather than mapped to an end of the colour
         # scale, where it would look like real data at an extreme level.
         self.image.setImage(db, levels=clim, autoLevels=False)
-        f0 = float(f[0]) if f.size else 0.0
-        f1 = float(f[-1]) if f.size else 1.0
-        self.image.setRect(QRectF(0.0, f0, x_max, max(f1 - f0, 1e-9)))
+        self.image.setRect(QRectF(0.0, y0, x_max, max(y1 - y0, 1e-9)))
         self.getPlotItem().setLogMode(x=False, y=log_freq)
         self.setXRange(0.0, x_max, padding=0)
-        self.setYRange(f0, f1, padding=0)
+        self.setYRange(y0, y1, padding=0)
+
+    @staticmethod
+    def _to_log_rows(db: np.ndarray, f: np.ndarray, fs: float, nfft: int):
+        """Resample rows onto a log-spaced frequency grid.  ``plot_specgram.m:96-100``.
+
+        Uses the same sinc matrix MATLAB uses, over the band actually displayed. The
+        matrix is built for the full bin count and then restricted, because its geometry
+        depends on the total rather than on the crop.
+        """
+        n_full = nfft // 2 + 1
+        m, rows = dsp.log_frequency_rows(n_full, fs, nfft)
+        # The displayed band may be a crop of the full spectrum; line the matrix up with
+        # the bins actually present.
+        first = int(round(f[0] * nfft / fs))
+        cols = slice(first, first + db.shape[0])
+        m = m[:, cols]
+        keep = (rows >= f[0]) & (rows <= f[-1]) & (rows > 0)
+        if keep.sum() < 2:
+            return db, f
+        return m[keep] @ db, rows[keep]
 
 
 class SpectrogramPanel(_ImagePanel):
@@ -181,7 +216,9 @@ class SpectrogramPanel(_ImagePanel):
                delimiters: bool = True) -> None:
         tile = frame.spectrogram
         x_max = float(frame.samples.shape[0]) / frame.fs
-        self._show(tile.db, x_max, tile.f, tile.clim, colormap, log_freq)
+        nfft = int(round(frame.fs / (tile.f[1] - tile.f[0]))) if tile.f.size > 1 else 0
+        self._show(tile.db, x_max, tile.f, tile.clim, colormap, log_freq,
+                   fs=frame.fs, nfft=nfft)
         self.getPlotItem().setLabel("bottom", "Time", units="s")
         self._draw_boundaries(
             [b.offset_sec for b in tile.boundaries] if delimiters else [], x_max

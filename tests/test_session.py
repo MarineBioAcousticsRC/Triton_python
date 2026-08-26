@@ -624,3 +624,55 @@ def test_open_from_ltsa_names_the_file_it_could_not_find(tmp_path: Path,
     sess.open_ltsa(moved)
     with pytest.raises(FileNotFoundError, match=XWAV.replace(".", r"\.")):
         sess.open_from_ltsa(0.0)
+
+
+# --------------------------------------------------------------- typed times
+
+
+@pytest.mark.parametrize(
+    "text,expect_sec",
+    [
+        ("2011-01-30T08:45:03.25", 3.25),
+        ("2011-01-30 08:45:04", 4.0),          # space instead of T
+        ("08:45:05.5", 5.5),                   # time only, date from the position
+        ("@7.25", 7.25),                       # seconds from the file start
+    ],
+)
+def test_parse_time_input_accepts_the_formats_people_have(s: TritonSession, text,
+                                                          expect_sec):
+    """Forgiving on purpose: the strings come from logs, spreadsheets and papers."""
+    got = s.parse_time_input(text)
+    expect = s.source.start + np.timedelta64(int(expect_sec * 1e9), "ns")
+    assert got == expect, text
+
+
+def test_relative_times_are_relative_to_where_we_are(s: TritonSession):
+    s.view.tseg_sec = 0.5
+    s.seek_text("@5")
+    assert s.parse_time_input("+1.5") == s.source.start + np.timedelta64(6500, "ms")
+    assert s.parse_time_input("-2") == s.source.start + np.timedelta64(3000, "ms")
+
+
+def test_a_time_outside_the_file_clamps_rather_than_refusing(s: TritonSession):
+    """A time typed from a log may be just outside this file; the nearest readable
+    point is more useful than an error."""
+    s.view.tseg_sec = 0.5
+    assert s.seek_text("2011-01-30T08:00:00") == s.source.start
+    landed = s.seek_text("2011-01-30T09:00:00")
+    assert landed < s.source.end
+    assert s.frame().spectrogram.db.size > 0, "and it must be readable there"
+
+
+def test_an_unparseable_time_lists_what_is_accepted(s: TritonSession):
+    """A typed value that silently does nothing is worse than one that explains."""
+    with pytest.raises(ValueError, match="Accepted forms"):
+        s.parse_time_input("last tuesday")
+    with pytest.raises(ValueError):
+        s.parse_time_input("")
+
+
+def test_seek_text_lands_on_a_readable_position(s: TritonSession):
+    s.view.tseg_sec = 0.5
+    for text in ("@0", "@5", "08:45:09.9", "+0.1"):
+        s.seek_text(text)
+        assert s.frame().spectrogram.db.size > 0, text

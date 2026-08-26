@@ -33,6 +33,8 @@ __all__ = [
     "to_int8_db",
     "apply_transfer_function_curve",
     "display_filter",
+    "logfmap",
+    "log_frequency_rows",
 ]
 
 
@@ -297,3 +299,79 @@ def display_filter(
         return x                            # too short to filter meaningfully
     b = firwin(n_order + 1, wn, pass_zero=False)
     return filtfilt(b, np.asarray([1.0]), x)
+
+
+def logfmap(n_bins: int, low: int = 4, high: int | None = None) -> np.ndarray:
+    """Matrix that remaps spectrogram rows onto a log frequency axis.
+
+    Port of ``logfmap.m``, used by ``plot_specgram.m:96-100``::
+
+        [M, N] = logfmap(flen, 4, flen)
+        c = M * c                  % remap the spectrogram
+        f = M * PARAMS.f           % ...and the frequency axis, identically
+        image(t, f, c); set(gca, 'YScale', 'log')
+
+    Returns ``M`` with shape ``(n_out, n_bins)``. Multiply a ``(n_bins, n_time)``
+    spectrogram by it on the left.
+
+    Each output row is a **sinc** kernel centred on an exponentially spaced input bin,
+    so this is bandlimited interpolation rather than nearest-neighbour picking -- which
+    matters at the bottom of the axis, where many output rows draw from very few input
+    bins and any cruder scheme produces visible banding.
+
+    ``low`` must exceed 1 and defaults to 4, as every caller passes. The reason is in
+    the MATLAB's own comment: bin 0 is DC, which has no place on a log axis at all, and
+    bins close to 1 make the number of output rows grow exponentially.
+    """
+    high = n_bins if high is None else high
+    if low <= 1:
+        raise ValueError(
+            f"low must be greater than 1 (got {low}): bin 1 is DC and cannot be "
+            f"placed on a log frequency axis"
+        )
+    # logfmap.m:20-21 converts 1-based indices to 0-based first.
+    lo, hi = low - 1, high - 1
+    if hi <= 1 or lo >= hi:
+        raise ValueError(f"need 1 < low < high <= n_bins, got {low}, {high}, {n_bins}")
+
+    ratio = (hi - 1) / hi
+    n_out = int(round(np.log(lo / hi) / np.log(ratio)))
+    ibin = lo * np.exp(np.arange(n_out) * -np.log(ratio))
+
+    # MATLAB's eps, added to both numerator and denominator so the kernel's centre is
+    # 0/0 -> 1 rather than NaN. Reproduced rather than special-cased at tt == 0,
+    # because the tiny bias it introduces elsewhere is present in every existing figure.
+    eps = np.finfo(np.float64).eps
+    tt = np.pi * (np.arange(n_bins)[None, :] - ibin[:, None])
+    return (np.sin(tt) + eps) / (tt + eps)
+
+
+def log_frequency_rows(
+    n_bins: int, fs: float, nfft: int, low: int = 4
+) -> tuple[np.ndarray, np.ndarray]:
+    """Remapping matrix and the true frequency of each of its rows.
+
+    Returns ``(M, freqs)``: multiply a ``(n_bins, n_time)`` spectrogram by ``M`` on the
+    left to get rows at ``freqs``, which are **exactly uniform in log10** and so can be
+    drawn as an image on a log axis.
+
+    **This differs from ``plot_specgram.m:98`` on purpose.** MATLAB obtains the axis as
+    ``f = M * PARAMS.f`` -- pushing the linear frequency ramp through the same sinc
+    matrix as the data. A ramp is not bandlimited, so the sinc sum rings, and the result
+    is neither uniform in log space nor faithful to the rows' actual centres: measured
+    at nfft 2000 and fs 200 kHz, the log-spacing of ``M * f`` has a relative standard
+    deviation of 2.1, and its top row comes out at 94 kHz where Nyquist is 100 kHz.
+
+    The frequencies here are computed analytically instead. Row ``i`` of ``M`` is a sinc
+    centred on input bin ``ibin[i]``, and ``ibin`` is geometric by construction
+    (``logfmap.m:25``), so ``fs/nfft * ibin`` is the frequency that row actually
+    samples and its log10 spacing is uniform to floating point.
+
+    The data path is unchanged -- ``M`` is the verified matrix, matching MATLAB's to
+    4e-14. Only the axis labelling differs, and only where MATLAB's was approximate.
+    """
+    m = logfmap(n_bins, low, n_bins)
+    lo, hi = low - 1, n_bins - 1
+    ratio = (hi - 1) / hi
+    ibin = lo * np.exp(np.arange(m.shape[0]) * -np.log(ratio))
+    return m, (fs / nfft) * ibin

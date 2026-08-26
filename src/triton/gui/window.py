@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QMainWindow,
     QMessageBox,
+    QScrollArea,
     QSplitter,
     QStatusBar,
     QVBoxLayout,
@@ -65,6 +66,11 @@ class MainWindow(QMainWindow):
         self.splitter = QSplitter(Qt.Orientation.Vertical)
         for name in PANEL_ORDER:
             self.splitter.addWidget(self.panels[name])
+        #: Remembered heights, so a panel toggled off and on again comes back the size
+        #: it was. A QSplitter gives a re-shown widget a near-zero height otherwise,
+        #: which is why toggling a panel used to leave it as a sliver needing a manual
+        #: drag -- and why it looked right on first open, when no panel had been hidden.
+        self._panel_heights: dict[str, int] = {}
 
         self.empty_label = QLabel("No plot type selected")
         self.empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -78,8 +84,19 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(centre)
 
         self.controls = ControlPanel(self.session, self.bridge)
+        # In a scroll area, because the panel is taller than a laptop screen and the
+        # lower groups were simply unreachable otherwise. Horizontal scrolling is off:
+        # the panel has a sensible width and a horizontal bar would only ever appear
+        # because something failed to fit, which is a layout bug to fix rather than to
+        # let the user scroll around.
+        scroller = QScrollArea()
+        scroller.setWidget(self.controls)
+        scroller.setWidgetResizable(True)
+        scroller.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroller.setMinimumWidth(self.controls.sizeHint().width() + 24)
+
         dock = QDockWidget("Controls", self)
-        dock.setWidget(self.controls)
+        dock.setWidget(scroller)
         dock.setAllowedAreas(
             Qt.DockWidgetArea.RightDockWidgetArea | Qt.DockWidgetArea.LeftDockWidgetArea
         )
@@ -195,8 +212,14 @@ class MainWindow(QMainWindow):
             "timeseries": v.show_timeseries and self.session.audio.is_open,
             "spectra": v.show_spectra and self.session.audio.is_open,
         }
+        # Remember what is on screen now, before anything is hidden.
+        for name, size in zip(PANEL_ORDER, self.splitter.sizes(), strict=False):
+            if self.panels[name].isVisible() and size > 0:
+                self._panel_heights[name] = size
+
         for name, panel in self.panels.items():
             panel.setVisible(wanted[name])
+        self._restore_heights(wanted)
         any_shown = any(wanted.values())
         self.splitter.setVisible(any_shown)
         # plot_triton.m:36-38 shows a logo and says "No plot type selected". Saying so
@@ -206,6 +229,31 @@ class MainWindow(QMainWindow):
             self.empty_label.setText("Open a file to begin  (File → Open audio)")
         elif not any_shown:
             self.empty_label.setText("No plot type selected")
+
+    def _restore_heights(self, wanted: dict[str, bool]) -> None:
+        """Give each visible panel back the height it had, or a fair share if it is new.
+
+        A QSplitter does not remember the size of a widget that was hidden, so without
+        this a re-shown panel returns as a few pixels and has to be dragged open. Panels
+        that were never sized get an equal share of whatever is left, which is what they
+        would have had on a fresh window.
+        """
+        visible = [n for n in PANEL_ORDER if wanted[n]]
+        if not visible:
+            return
+        total = self.splitter.height() or sum(self._panel_heights.values()) or 600
+        known = {n: self._panel_heights.get(n) for n in visible}
+        missing = [n for n, h in known.items() if not h]
+        spoken_for = sum(h for h in known.values() if h)
+        share = max((total - spoken_for) // max(len(missing), 1), 80) if missing else 0
+
+        sizes = []
+        for name in PANEL_ORDER:
+            if not wanted[name]:
+                sizes.append(0)
+            else:
+                sizes.append(known[name] or share)
+        self.splitter.setSizes(sizes)
 
     def _repaint(self, flags: Dirty) -> None:
         """Honour the most expensive flag we were given, and no more."""

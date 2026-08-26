@@ -32,13 +32,14 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QPushButton,
     QSpinBox,
     QVBoxLayout,
     QWidget,
 )
 
-from ..session import TritonSession, ValidationError
+from ..session import _TIME_FORMS, TritonSession, ValidationError
 from .bridge import SessionBridge
 
 __all__ = ["ControlPanel"]
@@ -189,6 +190,27 @@ class ControlPanel(QWidget):
         self.position_label = QLabel("--")
         form.addRow("Sample", self.position_label)
 
+        # Go-to-time. Without this the only way to reach a specific moment is to step
+        # to it, which is useless when the time came from a detection log or a paper.
+        goto = QHBoxLayout()
+        goto.setContentsMargins(0, 0, 0, 0)
+        self.goto_edit = QLineEdit()
+        self.goto_edit.setPlaceholderText("time, +secs, or @secs")
+        # From the session rather than repeated here, so the tooltip and the
+        # error message cannot drift apart.
+        self.goto_edit.setToolTip(
+            "Jump to a time. Any of:\n" + _TIME_FORMS + "\n\nEnter to go."
+        )
+        self.goto_edit.returnPressed.connect(self._goto_typed)
+        go = QPushButton("Go")
+        go.setMaximumWidth(40)
+        go.clicked.connect(self._goto_typed)
+        goto.addWidget(self.goto_edit)
+        goto.addWidget(go)
+        holder = QWidget()
+        holder.setLayout(goto)
+        form.addRow("Go to", holder)
+
         form.addRow("Segment length", self._spin("view.tseg_sec", 0.001, 86400.0,
                                                  step=0.5, decimals=3, suffix="s"))
         # -1 keeps PARAMS.tseg.step's convention: step by the window's own length.
@@ -280,6 +302,30 @@ class ControlPanel(QWidget):
         return box
 
     # --------------------------------------------------------------------- actions
+
+    def _goto_typed(self) -> None:
+        """Act on the go-to-time box.
+
+        The message on a bad entry goes in the box's own tooltip and the status bar
+        rather than a dialog: someone typing a time is mid-flow, and a modal
+        interruption for a typo is out of proportion. The text is left in place so it
+        can be corrected rather than retyped.
+        """
+        text = self.goto_edit.text()
+        if not text.strip():
+            return
+        try:
+            landed = self.session.seek_text(text)
+        except (ValueError, RuntimeError) as exc:
+            win = self.window()
+            if hasattr(win, "statusBar"):
+                win.statusBar().showMessage(str(exc).splitlines()[0], 8000)
+            self.goto_edit.setStyleSheet("background: #ffe8e8;")
+            return
+        self.goto_edit.setStyleSheet("")
+        win = self.window()
+        if hasattr(win, "statusBar"):
+            win.statusBar().showMessage(f"moved to {landed}", 4000)
 
     def _goto_start(self) -> None:
         if self.session.audio.is_open:

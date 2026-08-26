@@ -359,6 +359,66 @@ def test_int8_quantisation_ties_and_saturation(reference_dir: Path):
         )
 
 
+def test_logfmap_matrix_matches_matlab(reference_dir: Path):
+    """The log-frequency remapping matrix, `logfmap.m`.
+
+    These reference dumps were produced in Phase 0 and then sat unused until the log
+    frequency axis was implemented in Phase 3 -- a dumped reference nothing asserts on
+    is not coverage, which is the same lesson the LTSA `ch` offset taught. Asserting on
+    it now.
+
+    The matrix is dense and sinc-based: each row is a sinc kernel centred on an
+    exponentially spaced input bin, so it is bandlimited interpolation rather than
+    nearest-neighbour picking. That matters at the bottom of the axis, where many
+    output rows draw on very few input bins.
+    """
+    triton_dsp = pytest.importorskip("triton.dsp")
+    found = 0
+    for path in sorted(Path(reference_dir).glob("logfmap_*__M.json")):
+        n = int(path.name.split("_")[1])
+        expected, _ = load_reference_bin(f"logfmap_{n}__M")
+        got = triton_dsp.logfmap(n, 4, n)
+        assert got.shape == expected.shape, f"n={n}"
+        np.testing.assert_allclose(got, expected, rtol=0, atol=1e-12,
+                                   err_msg=f"logfmap({n}, 4, {n})")
+        found += 1
+    assert found, "no logfmap reference dumps found"
+
+
+def test_log_frequency_rows_are_uniform_in_log_space(reference_dir: Path):
+    """The one place the port deliberately departs from `plot_specgram.m`.
+
+    MATLAB takes the axis as `f = M * PARAMS.f`, pushing the linear frequency ramp
+    through the same sinc matrix as the data. A ramp is not bandlimited, so the sum
+    rings: the log-spacing of `M @ f` has a relative standard deviation above 2, and
+    its top row falls well short of Nyquist. An image cannot be drawn on that.
+
+    `log_frequency_rows` computes the row centres analytically instead. This asserts
+    both halves -- that ours is uniform, and that MATLAB's is not, so the departure is
+    documented by a failing alternative rather than by a comment.
+    """
+    triton_dsp = pytest.importorskip("triton.dsp")
+    for nfft, fs in ((256, 10_000), (2000, 200_000)):
+        n = nfft // 2 + 1
+        m, rows = triton_dsp.log_frequency_rows(n, fs, nfft)
+        assert m.shape[0] == rows.size
+
+        spacing = np.diff(np.log10(rows))
+        assert spacing.std() / spacing.mean() < 1e-9, (
+            f"nfft={nfft}: rows must be uniform in log10, got relative spread "
+            f"{spacing.std() / spacing.mean():.2e}"
+        )
+        assert rows[-1] > 0.98 * (fs / 2), "the top row should reach nearly Nyquist"
+
+        # ...and the MATLAB axis, for contrast.
+        matlab_axis = m @ (np.arange(n) * fs / nfft)
+        matlab_spacing = np.diff(np.log10(matlab_axis[matlab_axis > 0]))
+        assert matlab_spacing.std() / matlab_spacing.mean() > 1.0, (
+            "M @ f is expected to be badly non-uniform; if it is not, the departure "
+            "in log_frequency_rows is no longer justified and should be reverted"
+        )
+
+
 def test_transfer_function_interpolation(reference_dir: Path):
     triton_dsp = pytest.importorskip("triton.dsp")
     tf, _ = load_reference_bin("tf_interp__in")

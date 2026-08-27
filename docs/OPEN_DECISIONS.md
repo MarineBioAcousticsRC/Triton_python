@@ -335,20 +335,33 @@ not. Nothing needs deriving or guessing.
 | 30,040 | 15,380,480 | 4 |
 | 30,050 | 15,385,600 | 1 |
 
+The 320 kHz folder shows it too — 28,000 sectors in one file, 28,009 in another on the same disk.
+And the 4-channel files report `write_length = 49,600` where their firmware row says 50,000.
+
 So a single table value for `nsectPerRawFile` is **provably wrong for half the files on this
-disk**. Every one of their x.wavs is exactly 30,000,140 bytes (75 s at 200 kHz), so the converter
+disk**, and wrong for the 4-channel case in every file. Every one of their x.wavs is exactly 30,000,140 bytes (75 s at 200 kHz), so the converter
 uses the nominal size and the extra sectors are discarded. Why the sizes vary is not established
 here.
 
-**3. Timestamps are embedded densely throughout the raw data.** A 12-byte header sits at the start
-of every sector (`blksz = (512-12)/2`), and **every 8th sector's header carries a timestamp** —
-about 3,750 of them in a 75-second raw file, one per ~20 ms of audio. Verified monotonic, and
-sector 0's stamp matches the converted x.wav's start time exactly on all three files checked.
+**3. Timestamps are embedded throughout the raw data, in every format tested.** A 12-byte header
+sits at the start of every sector (`blksz = (512-12)/2`), and how often it carries a *timestamp*
+depends on whether the data is compressed:
 
-**They are present in the compressed file too.** `Shorted_ATD_hrp/SHRATD_2101` — a shorted-input lab
-recording — has the same 3,751 stamps at the same 8-sector spacing as the eval files. So compression
-does not remove them, which was the open question. (It also shows the 2:1 "compression" is
-structural rather than data-dependent: a shorted input compresses no better than real audio.)
+| data | file | stamps found | spacing |
+|---|---|---|---|
+| 4 ch, 200 kHz, **uncompressed** | `4Channel_200kHz_spotcheck` | **50,000 / 50,000** | **every sector** |
+| 1 ch, 200 kHz, compressed (`3A01`) | `ExampleSpotCheck/eval` | 3,751 / 30,000 | every 8th sector |
+| 1 ch, 320 kHz, compressed (`V2.64`) | `320kHz_spotcheck` | 3,505 / 28,000 | every 8th sector |
+| shorted-input lab test | `Shorted_ATD_hrp` | 3,751 / 30,000 | every 8th sector |
+
+The 4-channel case is the unambiguous one: **every sector** parses, with no plausibility-test noise
+at all, and consecutive deltas average exactly 0.31 ms — 62 frames of 4 channels at 200 kHz, which
+is what 248 samples per sector gives. Sector 0's stamp matches the converted x.wav's start time
+exactly on every file checked.
+
+So compression does not remove the timestamps, it only thins them — which was the open question.
+(It also shows the 2:1 "compression" is structural rather than data-dependent: a shorted input
+compresses no better than real audio.)
 
 **Watch the tick endianness.** `read_rawHARPdir.m:101` reads ticks as `dl(7)*2^8 + dl(8)`, i.e.
 **big-endian**, for 3A/3B firmware from March 2022 — and the other way for `3B02220110` and
@@ -361,6 +374,15 @@ the wrong byte order.
 from the data, and the per-raw-file byte and sector counts are already in the directory list. So the
 firmware table need not carry `nsampPerRawFile`/`nsectPerRawFile` at all for reading — those columns
 describe a nominal value that half the real files do not match.
+
+**The current workaround is worse than "swap a file".** `HARPproc/` carries two live tables, and
+the 320 kHz one is a **stale branch rather than a variant**: as well as the two changed rows it is
+missing `3A05250108`, `4A01251106` and `6A01260219` entirely. So swapping it in to process 320 kHz
+`3A01` data makes those three firmwares unprocessable. The swap does not merely require remembering
+to swap — it guarantees the two tables drift, which is the four-copies problem reproduced inside one
+directory. Only the new `3A01` firmware needs it at all: `V2.64`, the older 320 kHz firmware,
+already carries correct 320 kHz values in both tables, verified against
+`ExampleData/320kHz_spotcheck`.
 
 **Status.** Measured, not yet acted on. It removes the need for the conditionals rather than
 centralising them, so it is worth putting to Bruce before the HARPproc merge chooses an approach.

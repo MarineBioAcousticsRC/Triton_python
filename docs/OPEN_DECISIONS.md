@@ -32,7 +32,7 @@ Both are defensible and the choice belongs to the people whose papers depend on 
 | [2.3](#23-do-xwav-files-with-other-than-1-or-4-channels-exist) | whether `blksz` needs more cases | Needs an archive search |
 | [2.4](#24-blksz-assumes-16-bit-samples) | `write_length` for 32-bit | Coupled to 2.1 |
 | [2.5](#25-is-the-4-channel-multidir-fork-superseded) | HARPproc merge scope | HARPproc authors |
-| [2.6](#26-what-are-harplabs-25-unique-lines-in-hrp2xwav_multidir) | HARPproc merge scope | HARPLab author |
+| 2.6 | ~~HARPLab's 25 unique lines~~ | **Answered:** 260304 supersedes it | — |
 | [2.7](#27-is-extrasmsdxfer-still-used) | whether to keep it | Lab |
 | [3.1](#31-an-ltsa-can-name-at-most-65535-source-files) | nothing — limit, with a fix | Settled: split |
 | [3.2](#32-an-ltsa-cannot-exceed-4-gb-of-spectra) | nothing — limit | Settled: split |
@@ -275,11 +275,20 @@ Four-channel support clearly exists in the mainline — the `3B*` firmware rows 
 are in the current table. So the narrow question is whether this fork's **time-header** handling was
 folded in or still lives only here. **Needs the author.** **Status.** Open, for the HARPproc merge.
 
-### 2.6 What are HARPLab's 25 unique lines in `hrp2xwav_multidir`?
+### 2.6 What are HARPLab's 25 unique lines in `hrp2xwav_multidir`? — **ANSWERED**
 
-Relative to HARPproc_260304, HARPLab's copy has **25 lines not present there** (and 260304 has 87
-that HARPLab lacks). So the merge task is reviewing 25 specific lines, not reconciling two forks.
-**Needs the HARPLab author.** **Status.** Open, for the HARPproc merge.
+**Nothing unique.** All 21 lines of actual code are the older, hardcoded form of the same IMU
+extraction that HARPproc_260304 has since parameterised:
+
+| HARPLab | 260304 |
+|---|---|
+| `imu_block == 4` | `imu_block == imuRecSz` |
+| `[imua, imub]`, fixed 8 bytes | `idlen`, with an explicit `4x200kHz` branch |
+| only `'3B03'` | `'3B03'` or `'3A05250108'` |
+| one `.imu` per xwav | plus a concatenated one per disk |
+
+Confirmed by Bruce independently: he fixed the IMU processing and added 200 kHz support earlier in
+2026. **260304 supersedes HARPLab outright**; no reconciliation needed. Answered 2026-08-27.
 
 ### 2.7 Is `Extras/msdxfer` still used?
 
@@ -288,6 +297,73 @@ setup notes. SpotCheck simply lacks it. So retaining it costs nothing and there 
 reconcile; the only question is whether to carry it forward at all. **Status.** Open, low stakes.
 
 ---
+
+## 2a. Raw HRP files carry their own timing — measured, 2026-08-27
+
+Recorded because it settles a design question that was heading toward hardcoded conditionals, and
+because the measurement is cheap to redo but easy to forget.
+
+**The question.** `nsampPerRawFile` is looked up by firmware version, but one firmware string now
+covers both 200 and 320 kHz, which have different raw-file durations. Sample rate is in the HRP
+header; raw-file size was believed not to be. The proposed fixes were an educated guess from
+directory-list values, a calculation, or `if/else` on sample rate inside `ckFirmware`.
+
+**Three findings, all measured on `ExampleData`.**
+
+**1. The directory list already records the answer, per raw file.** `read_rawHARPdir.m:10-26`
+documents the layout:
+
+```
+dirlist col   field          bytes    meaning
+1             blk_number     4        starting sector number of data
+9             sample_rate    4        sample rate
+10            num_blocks     4        number of sectors RECORDED
+11            rec_length     4        number of bytes RECORDED
+```
+
+"Recorded", not "expected". The reading loop in `hrp2xwav_multidir.m` already uses
+`dirlist(j,10)` as its sector count. Only **`write_XWAVhead.m:61-73`** falls back to the firmware
+table and then to hardcoded values — so the reader already does the right thing and the writer does
+not. Nothing needs deriving or guessing.
+
+**2. Raw files are not all the same size, even on one disk.** Ten raw files from
+`ExampleSpotCheck/eval/data/d01`:
+
+| sectors | bytes | count |
+|---:|---:|---:|
+| 30,000 | 15,360,000 | 5 |
+| 30,040 | 15,380,480 | 4 |
+| 30,050 | 15,385,600 | 1 |
+
+So a single table value for `nsectPerRawFile` is **provably wrong for half the files on this
+disk**. Every one of their x.wavs is exactly 30,000,140 bytes (75 s at 200 kHz), so the converter
+uses the nominal size and the extra sectors are discarded. Why the sizes vary is not established
+here.
+
+**3. Timestamps are embedded densely throughout the raw data.** A 12-byte header sits at the start
+of every sector (`blksz = (512-12)/2`), and **every 8th sector's header carries a timestamp** —
+about 3,750 of them in a 75-second raw file, one per ~20 ms of audio. Verified monotonic, and
+sector 0's stamp matches the converted x.wav's start time exactly on all three files checked.
+
+**They are present in the compressed file too.** `Shorted_ATD_hrp/SHRATD_2101` — a shorted-input lab
+recording — has the same 3,751 stamps at the same 8-sector spacing as the eval files. So compression
+does not remove them, which was the open question. (It also shows the 2:1 "compression" is
+structural rather than data-dependent: a shorted input compresses no better than real audio.)
+
+**Watch the tick endianness.** `read_rawHARPdir.m:101` reads ticks as `dl(7)*2^8 + dl(8)`, i.e.
+**big-endian**, for 3A/3B firmware from March 2022 — and the other way for `3B02220110` and
+`3B01211021`. Reading them little-endian silently rejects real timestamps as invalid, which is
+exactly the mistake made on the first pass here: it looked like the stamps appeared only every 400
+sectors, and that the anomalously sized files had timing breaks. Both conclusions were artefacts of
+the wrong byte order.
+
+**Consequence.** The raw file's true extent, true timing, and any discontinuity are all measurable
+from the data, and the per-raw-file byte and sector counts are already in the directory list. So the
+firmware table need not carry `nsampPerRawFile`/`nsectPerRawFile` at all for reading — those columns
+describe a nominal value that half the real files do not match.
+
+**Status.** Measured, not yet acted on. It removes the need for the conditionals rather than
+centralising them, so it is worth putting to Bruce before the HARPproc merge chooses an approach.
 
 ## 3. Format limits, not bugs
 

@@ -545,3 +545,83 @@ def test_log_frequency_does_not_produce_absurd_axis_limits(win, app):
     # In log mode the range is in log10 units, so a sane audio band is single digits.
     assert -3 < y0 < 6 and -3 < y1 < 6, f"log y range is {(y0, y1)}"
     assert y1 > y0
+
+
+# ---------------------------------------------------- LTSA navigation and playback
+
+
+def test_ltsa_motion_buttons_move_the_window(win, app, generated_dir: Path):
+    win.session.open_ltsa(generated_dir / LTSA)
+    win.session.ltsa.tseg_hr = 2 / 3600
+    app.processEvents()
+    win.controls._ltsa_start()
+    first = win.session.ltsa.position
+
+    win.controls._ltsa_step(+1)
+    assert win.session.ltsa.position > first
+    win.controls._ltsa_step(-1)
+    assert win.session.ltsa.position == first
+
+    win.controls._ltsa_end()
+    assert win.session.ltsa_at_end()
+
+
+def test_ltsa_motion_is_inert_with_no_ltsa_open(win, app):
+    """The buttons exist before a file does; they must not raise."""
+    win.session.close()
+    app.processEvents()
+    win.controls._ltsa_step(+1)
+    win.controls._ltsa_start()
+    win.controls._ltsa_end()
+
+
+def test_the_ltsa_position_readout_tracks_the_window(win, app, generated_dir: Path):
+    win.session.open_ltsa(generated_dir / LTSA)
+    win.session.ltsa.tseg_hr = 2 / 3600
+    app.processEvents()
+    win.controls._ltsa_start()
+    text = win.controls.ltsa_position_label.text()
+    assert "bin 1 of" in text, text
+    win.controls._ltsa_step(+1)
+    assert win.controls.ltsa_position_label.text() != text
+
+
+def test_play_reports_rather_than_raising_without_a_device(win, app, monkeypatch):
+    """A compute node or CI runner has no audio stack, and that is not an error."""
+    def no_device(*_a, **_k):
+        raise RuntimeError("no sound device")
+
+    monkeypatch.setattr(win.player, "play", no_device)
+    win.controls._play()
+    app.processEvents()
+    assert "cannot play" in win.statusBar().currentMessage()
+    assert win.controls.play_button.isEnabled(), "must stay usable after a failure"
+
+
+def test_play_prepares_the_current_window(win, app, monkeypatch):
+    """What is played must be built from the frame, so it matches what is drawn."""
+    played = {}
+    monkeypatch.setattr(win.player, "play", lambda p: played.setdefault("p", p))
+    monkeypatch.setattr(win.player, "default_rate", lambda fallback=48_000: 48_000)
+
+    win.session.view.tseg_sec = 0.5
+    win.session.view.play_speed = 1.0
+    win.controls._play()
+    app.processEvents()
+
+    assert "p" in played, win.statusBar().currentMessage()
+    assert played["p"].samples.size > 0
+    assert win.controls.stop_button.isEnabled()
+    assert not win.controls.play_button.isEnabled()
+
+    win.controls._stop()
+    assert win.controls.play_button.isEnabled()
+
+
+def test_fit_to_hearing_sets_a_speed_that_keeps_the_whole_band(win, app, monkeypatch):
+    monkeypatch.setattr(win.player, "default_rate", lambda fallback=48_000: 48_000)
+    win.controls._fit_speed()
+    app.processEvents()
+    fs = win.session.audio.source.sample_rate
+    speed = win.session.view.play_speed
+    assert (48_000 / 2) / speed >= fs / 2 - 1, "the whole band should fit"

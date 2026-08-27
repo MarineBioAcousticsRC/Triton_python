@@ -263,6 +263,12 @@ class ViewState(_State):
     show_timeseries: bool = False
     show_spectra: bool = False
 
+    # Playback. Speed multiplies the effective sample rate, as PARAMS.speedFactor
+    # does, so values below 1 slow the audio down and pitch it into hearing range --
+    # which is the normal case for anything recorded above about 50 kHz.
+    play_speed: float = 1.0
+    play_volume: float = 0.8
+
     # Log frequency axis, as PARAMS.fax / the specgramlog control.
     log_freq: bool = False
     show_delimiters: bool = True
@@ -276,6 +282,7 @@ class ViewState(_State):
         "contrast": _positive,
         "filter_low": _non_negative,
         "filter_high": _positive,
+        "play_speed": _positive,
     }
 
 
@@ -286,6 +293,11 @@ class LtsaState(_State):
     source: _ltsa.LtsaSource | None = None
     path: Path | None = None
     tseg_hr: float = 1.0
+    #: Step size, following ``PARAMS.ltsa.tseg.step``'s three-way convention:
+    #: **-1** steps by one window of *bins*, skipping gaps -- the default, and what
+    #: ``stepPlotTimeLTSA.m`` does; **-2** steps by one window of *hours*; any positive
+    #: value steps by that many hours.
+    step_hr: float = -1.0
     freq0: float = 0.0
     freq1: float | None = None
     brightness: float = 0.0
@@ -801,6 +813,87 @@ class TritonSession:
         db = db * (st.contrast / 100.0) + st.brightness
         return LtsaTile(start=start, f=f, t=src.bin_times_hours(st.tseg_hr),
                         db=db, clim=_derive_clim(db))
+
+    # -------------------------------------------------------------------- listening
+
+    def playable(self, out_rate: int = 48_000):
+        """The current window, ready for a sound device.
+
+        Uses the frame's samples, so what is heard is what is drawn -- including the
+        display filter if it is on. That is the useful behaviour: someone who has
+        band-passed the display to isolate a call wants to hear that band, not the
+        broadband hiss around it.
+        """
+        from . import playback
+
+        frame = self.frame()
+        return playback.prepare(
+            frame.samples[:, frame.channel - 1], frame.fs,
+            speed=self.view.play_speed, volume=self.view.play_volume,
+            out_rate=out_rate,
+        )
+
+    # ------------------------------------------------------------- LTSA navigation
+
+    @property
+    def ltsa_source(self) -> _ltsa.LtsaSource:
+        if self.ltsa.source is None:
+            raise RuntimeError("no LTSA open; call open_ltsa() first")
+        return self.ltsa.source
+
+    def step_ltsa(self, n: int = 1) -> np.datetime64:
+        """Move the LTSA window ``n`` steps.  Returns the new position.
+
+        Honours ``ltsa.step_hr``'s three-way convention (see the field). The default
+        steps by bins, so the window stays full of data on duty-cycled deployments
+        instead of advancing the clock into a gap.
+        """
+        src = self.ltsa_source
+        st = self.ltsa
+        here = st.position or src.start_time
+
+        if st.step_hr == -1:
+            t = src.advance_bins(here, n * src.bins_for(st.tseg_hr))
+        else:
+            hours = st.tseg_hr if st.step_hr == -2 else st.step_hr
+            t = here + np.timedelta64(int(round(n * hours * 3600 * 1e9)), "ns")
+
+        # Clamp to the last position where a **whole window** still fits, not to the
+        # last bin. Two reasons, and the second is the one that bites: a window starting
+        # on the final bin would show a single column, and that position is not even
+        # readable -- an entry's declared end is one time bin short of its data
+        # (read_ltsahead.m:159 subtracts 1/fs), so `entry_containing`, which requires
+        # room for a full bin, resolves nothing there. Exactly the same shape as
+        # `_max_start_offset` on the audio side.
+        last_start = max(0, src.total_bins - src.bins_for(st.tseg_hr))
+        first, last = src.start_time, src.time_of_bin(last_start)
+        st.position = max(first, min(t, last))
+        return st.position
+
+    def ltsa_to_start(self) -> np.datetime64:
+        self.ltsa.position = self.ltsa_source.start_time
+        return self.ltsa.position
+
+    def ltsa_to_end(self) -> np.datetime64:
+        """Position so the last window ends at the end of the data.
+
+        Not "jump to the final bin", which would leave a window showing one column.
+        """
+        src = self.ltsa_source
+        last = src.total_bins - 1
+        self.ltsa.position = src.time_of_bin(
+            max(0, last - src.bins_for(self.ltsa.tseg_hr) + 1)
+        )
+        return self.ltsa.position
+
+    def ltsa_at_start(self) -> bool:
+        return (self.ltsa.position or self.ltsa_source.start_time) <= \
+            self.ltsa_source.start_time
+
+    def ltsa_at_end(self) -> bool:
+        src = self.ltsa_source
+        here = self.ltsa.position or src.start_time
+        return src.bin_index(here) + src.bins_for(self.ltsa.tseg_hr) >= src.total_bins
 
     # --------------------------------------------------------------- typed times
 

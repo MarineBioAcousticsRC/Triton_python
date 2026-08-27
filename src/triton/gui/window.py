@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ..playback import Player
 from ..session import TritonSession
 from .bridge import Dirty, SessionBridge
 from .controls import ControlPanel
@@ -103,6 +104,10 @@ class MainWindow(QMainWindow):
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
         self.controls_dock = dock
 
+        #: One player for the window. Constructed eagerly but it touches no audio
+        #: device until asked to play, so a machine with no sound stack is fine.
+        self.player = Player()
+
         self.setStatusBar(QStatusBar())
         self._build_menus()
 
@@ -150,6 +155,18 @@ class MainWindow(QMainWindow):
             self.addAction(act)
         view_menu.addSeparator()
         view_menu.addAction(self.controls_dock.toggleViewAction())
+
+        sound_menu = self.menuBar().addMenu("&Sound")
+        for label, keys, fn in (
+            ("Play", ("Space",), self.controls._play),
+            ("Stop", ("Escape",), self.controls._stop),
+            ("Fit speed to hearing", ("Ctrl+H",), self.controls._fit_speed),
+        ):
+            act = QAction(label, self)
+            act.setShortcuts([QKeySequence(k) for k in keys])
+            act.triggered.connect(fn)
+            sound_menu.addAction(act)
+            self.addAction(act)
 
     # ------------------------------------------------------------------- open files
 
@@ -358,5 +375,6 @@ class MainWindow(QMainWindow):
         )
 
     def closeEvent(self, event) -> None:              # noqa: N802 -- Qt naming
+        self.player.stop()
         self.bridge.detach()
         super().closeEvent(event)

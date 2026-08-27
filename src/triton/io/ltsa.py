@@ -49,6 +49,10 @@ __all__ = [
 _NS_PER_SEC = 1_000_000_000
 
 
+def _as_ns_local(t: np.datetime64) -> int:
+    return int(np.datetime64(t, "ns").astype("int64"))
+
+
 @dataclass(frozen=True)
 class _Layout:
     """Version-dependent field widths and offsets."""
@@ -415,6 +419,54 @@ class LtsaSource:
             padded[: vals.size] = vals
             vals = padded
         return vals.reshape((nf, cols), order="F")
+
+    @property
+    def total_bins(self) -> int:
+        """Every time bin in the file, across all entries."""
+        return sum(e.n_ave for e in self.header.entries)
+
+    def bin_index(self, t: np.datetime64) -> int:
+        """Global bin number containing ``t``, counting continuously across entries.
+
+        The LTSA's x axis is bins laid side by side, so a *global* bin number is the
+        natural coordinate for navigation: stepping is then addition, and the
+        raw-file walk happens once in :meth:`time_of_bin` rather than at every call
+        site. Clamps into the file.
+        """
+        tave_ns = int(round(self.header.tave * _NS_PER_SEC))
+        t_ns = _as_ns_local(t)
+        base = 0
+        for e in self.header.entries:
+            if t_ns < e.start_ns:
+                return base                       # in the gap before this entry
+            within = (t_ns - e.start_ns) // tave_ns
+            if within < e.n_ave:
+                return base + int(within)
+            base += e.n_ave
+        return max(0, self.total_bins - 1)
+
+    def time_of_bin(self, k: int) -> np.datetime64:
+        """Start time of global bin ``k``.  The inverse of :meth:`bin_index`."""
+        k = max(0, min(int(k), max(self.total_bins - 1, 0)))
+        tave_ns = int(round(self.header.tave * _NS_PER_SEC))
+        for e in self.header.entries:
+            if k < e.n_ave:
+                return np.datetime64(e.start_ns + k * tave_ns, "ns")
+            k -= e.n_ave
+        last = self.header.entries[-1]
+        return np.datetime64(last.start_ns + (last.n_ave - 1) * tave_ns, "ns")
+
+    def advance_bins(self, t: np.datetime64, n_bins: int) -> np.datetime64:
+        """Move ``n_bins`` through the data from ``t``, skipping duty-cycle gaps.
+
+        Port of ``stepPlotTimeLTSA.m``, which is what ``motion_ltsa.m`` uses when the
+        step is -1 -- the default. Stepping by *bins* rather than by hours is the
+        difference between paging through the data and paging through the clock: on a
+        duty-cycled deployment an hour of wall-clock may contain a few minutes of
+        recording, so an hours-based step lands on empty windows while a bins-based one
+        always shows data.
+        """
+        return self.time_of_bin(self.bin_index(t) + n_bins)
 
     def locate(self, start: np.datetime64, hours_from_left: float,
                hours: float) -> tuple[int, int, np.datetime64]:

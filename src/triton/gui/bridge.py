@@ -80,6 +80,9 @@ _RULES: tuple[tuple[str, Dirty], ...] = (
     ("view.show_spectra", Dirty.LAYOUT | Dirty.DATA),
     ("view.show_delimiters", Dirty.DISPLAY),
     ("view.log_freq", Dirty.AXES),
+    # Playback settings change what is heard, never what is drawn.
+    ("view.play_speed", Dirty.NOTHING),
+    ("view.play_volume", Dirty.NOTHING),
     ("view.filter_on", Dirty.DATA),
     ("view.filter_low", Dirty.DATA),
     ("view.filter_high", Dirty.DATA),

@@ -676,3 +676,158 @@ def test_seek_text_lands_on_a_readable_position(s: TritonSession):
     for text in ("@0", "@5", "08:45:09.9", "+0.1"):
         s.seek_text(text)
         assert s.frame().spectrogram.db.size > 0, text
+
+
+# ------------------------------------------------------------------ LTSA navigation
+
+DUTY_LTSA = "xwav_v1_duty_1ch_16b_10k__tave1_df100.ltsa"
+
+
+@pytest.fixture
+def lt(generated_dir: Path) -> TritonSession:
+    sess = TritonSession()
+    sess.open_ltsa(generated_dir / DUTY_LTSA)
+    sess.ltsa.tseg_hr = 2 / 3600          # 2 s window = 2 bins
+    return sess
+
+
+def test_bin_index_and_time_of_bin_round_trip(lt: TritonSession):
+    src = lt.ltsa_source
+    for k in range(src.total_bins):
+        assert src.bin_index(src.time_of_bin(k)) == k
+
+
+def test_stepping_by_bins_skips_duty_cycle_gaps(lt: TritonSession):
+    """The reason `stepPlotTimeLTSA.m` exists and is the default.
+
+    Stepping by bins pages through the *data*; stepping by hours pages through the
+    *clock*, which on a duty-cycled deployment lands on windows containing nothing.
+    """
+    src = lt.ltsa_source
+    lt.ltsa.step_hr = -1                  # by bins, the default
+    lt.ltsa_to_start()
+    seen = [lt.ltsa.position]
+    for _ in range(3):
+        seen.append(lt.step_ltsa(+1))
+
+    # Every landing must be inside a raw file, never in a gap.
+    for t in seen:
+        assert any(e.start <= t < e.end for e in src.header.entries), t
+    # And it must have crossed a gap: raw file 0 ends 2.4999 s in, the next starts at
+    # 10 s, so a bins-based step reaches the second raw file within a few steps.
+    assert any(t >= src.header.entries[1].start for t in seen)
+
+
+def test_stepping_by_hours_advances_the_clock_instead(lt: TritonSession):
+    lt.ltsa.step_hr = -2                  # by one window of hours
+    lt.ltsa_to_start()
+    first = lt.ltsa.position
+    second = lt.step_ltsa(+1)
+    assert second - first == np.timedelta64(2, "s")
+
+
+def test_an_explicit_hour_step_is_honoured(lt: TritonSession):
+    lt.ltsa.step_hr = 1 / 3600            # one second
+    lt.ltsa_to_start()
+    before = lt.ltsa.position
+    assert lt.step_ltsa(+1) - before == np.timedelta64(1, "s")
+
+
+def test_ltsa_to_end_leaves_a_full_window(lt: TritonSession):
+    """Not "jump to the final bin", which would show a single column."""
+    src = lt.ltsa_source
+    lt.ltsa_to_end()
+    assert lt.ltsa_at_end()
+    remaining = src.total_bins - src.bin_index(lt.ltsa.position)
+    assert remaining == src.bins_for(lt.ltsa.tseg_hr)
+
+
+def test_ltsa_motion_clamps_at_both_ends(lt: TritonSession):
+    lt.ltsa_to_start()
+    for _ in range(50):
+        lt.step_ltsa(-1)
+    assert lt.ltsa_at_start()
+    for _ in range(200):
+        lt.step_ltsa(+1)
+    assert lt.ltsa_at_end()
+    # and the clamped position still reads
+    assert lt.ltsa_tile().db.size > 0
+
+
+# ------------------------------------------------------------------------ playback
+
+
+def test_prepare_applies_the_requested_speed_exactly():
+    """MATLAB snaps speedFactor to an integer with floor/ceil, so 0.1x on a 200 kHz
+    file silently becomes 1x. A rational resampling ratio has no such limit."""
+    from triton import playback
+
+    fs, n = 200_000, 200_000
+    x = np.random.default_rng(0).normal(size=n)
+    for speed in (1.0, 0.24, 0.1, 0.05):
+        p = playback.prepare(x, fs, speed=speed, out_rate=48_000)
+        assert p.speed == speed
+        expect = (n / fs) / speed
+        assert abs(p.duration_sec - expect) / expect < 0.01, speed
+
+
+def test_prepare_reports_what_it_had_to_discard():
+    """Someone listening for a 60 kHz click should be told when it cannot be there."""
+    from triton import playback
+
+    x = np.random.default_rng(0).normal(size=100_000)
+    fast = playback.prepare(x, 200_000, speed=1.0, out_rate=48_000)
+    assert fast.discarded_above_hz == pytest.approx(24_000)
+    assert fast.audible_up_to_hz == pytest.approx(24_000)
+
+    slow = playback.prepare(x, 200_000, speed=0.2, out_rate=48_000)
+    assert slow.discarded_above_hz is None, "the whole band fits at this speed"
+    assert slow.audible_up_to_hz == pytest.approx(100_000)
+
+
+def test_prepare_normalises_to_the_requested_volume():
+    from triton import playback
+
+    x = np.random.default_rng(0).normal(size=10_000) * 5000 + 12_000   # DC offset
+    p = playback.prepare(x, 10_000, volume=0.5)
+    assert np.max(np.abs(p.samples)) == pytest.approx(0.5, abs=1e-6)
+    assert abs(float(p.samples.mean())) < 0.02, "the DC offset must have been removed"
+
+
+def test_prepare_refuses_what_cannot_be_played():
+    from triton import playback
+
+    x = np.ones(1000)
+    with pytest.raises(ValueError, match="positive"):
+        playback.prepare(x, 10_000, speed=0)
+    with pytest.raises(ValueError, match=r"\[0, 1\]"):
+        playback.prepare(x, 10_000, volume=1.5)
+    with pytest.raises(ValueError, match="below the 1000 Hz floor"):
+        playback.prepare(x, 10_000, speed=0.01)
+    with pytest.raises(ValueError, match="nothing to play"):
+        playback.prepare(np.empty(0), 10_000)
+
+
+def test_suggest_speed_makes_the_whole_band_audible():
+    from triton import playback
+
+    for fs in (100_000, 200_000, 320_000):
+        speed = playback.suggest_speed(fs, 48_000)
+        p = playback.prepare(np.ones(fs // 10), fs, speed=speed, out_rate=48_000)
+        assert p.discarded_above_hz is None, f"fs={fs} speed={speed}"
+    assert playback.suggest_speed(10_000, 48_000) == 1.0, "no slowing needed"
+
+
+def test_playable_uses_the_frame_so_what_you_hear_is_what_you_see(s: TritonSession):
+    """Including the display filter, which is the useful behaviour: someone who has
+    band-passed the display to isolate a call wants to hear that band."""
+    s.view.tseg_sec = 0.5
+    plain = s.playable(out_rate=48_000)
+
+    s.view.filter_on = True
+    s.view.filter_low, s.view.filter_high = 1500.0, 2500.0
+    filtered = s.playable(out_rate=48_000)
+
+    assert plain.samples.shape == filtered.samples.shape
+    assert not np.allclose(plain.samples, filtered.samples), \
+        "the display filter must reach the audio"

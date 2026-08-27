@@ -114,6 +114,8 @@ class ControlPanel(QWidget):
         root.addWidget(self._spectrogram_group())
         root.addWidget(self._colour_group())
         root.addWidget(self._filter_group())
+        root.addWidget(self._ltsa_group())
+        root.addWidget(self._sound_group())
         root.addStretch(1)
 
         bridge.changed.connect(self._on_change)
@@ -130,6 +132,8 @@ class ControlPanel(QWidget):
             b.refresh()
         if path in ("audio.source", "view.tseg_sec", "audio.segment", "audio.offset"):
             self._refresh_readouts()
+        if path.startswith("ltsa."):
+            self._refresh_ltsa_position()
 
     def _spin(self, path: str, lo: float, hi: float, step: float = 1.0,
               decimals: int = 0, suffix: str = "") -> QWidget:
@@ -301,7 +305,154 @@ class ControlPanel(QWidget):
                                      decimals=1, suffix="Hz"))
         return box
 
+    def _ltsa_group(self) -> QGroupBox:
+        """Motion for the LTSA panel, which has its own window and its own step."""
+        box = QGroupBox("LTSA")
+        form = QFormLayout(box)
+        form.addRow("Window", self._spin("ltsa.tseg_hr", 0.0001, 8760.0, step=0.5,
+                                         decimals=4, suffix="hr"))
+        step = self._spin("ltsa.step_hr", -2.0, 8760.0, step=0.5, decimals=4,
+                          suffix="hr")
+        step.setToolTip(
+            "-1  step by one window of time bins, skipping duty-cycle gaps (default)\n"
+            "-2  step by one window of hours\n"
+            "n   step by n hours"
+        )
+        form.addRow("Step", step)
+
+        motion = QHBoxLayout()
+        motion.setContentsMargins(0, 0, 0, 0)
+        for label, tip, fn in (
+            ("|◀", "start of LTSA", self._ltsa_start),
+            ("◀◀", "back one step", lambda: self._ltsa_step(-1)),
+            ("▶▶", "forward one step", lambda: self._ltsa_step(+1)),
+            ("▶|", "end of LTSA", self._ltsa_end),
+        ):
+            b = QPushButton(label)
+            b.setToolTip(tip)
+            b.setMaximumWidth(48)
+            b.clicked.connect(fn)
+            motion.addWidget(b)
+        holder = QWidget()
+        holder.setLayout(motion)
+        form.addRow("", holder)
+
+        self.ltsa_position_label = QLabel("--")
+        form.addRow("Position", self.ltsa_position_label)
+        return box
+
+    def _sound_group(self) -> QGroupBox:
+        """Playback of the window on screen."""
+        box = QGroupBox("Sound")
+        form = QFormLayout(box)
+
+        speed = self._spin("view.play_speed", 0.001, 100.0, step=0.05, decimals=3,
+                           suffix="x")
+        speed.setToolTip(
+            "Multiplies the sample rate, as Triton's speed factor does.\n"
+            "Below 1 slows the audio and pitches it into hearing range,\n"
+            "which is how a 60 kHz click becomes something you can hear."
+        )
+        form.addRow("Speed", speed)
+        form.addRow("Volume", self._spin("view.play_volume", 0.0, 1.0, step=0.1,
+                                         decimals=2))
+
+        buttons = QHBoxLayout()
+        buttons.setContentsMargins(0, 0, 0, 0)
+        self.play_button = QPushButton("Play")
+        self.play_button.clicked.connect(self._play)
+        self.stop_button = QPushButton("Stop")
+        self.stop_button.clicked.connect(self._stop)
+        self.stop_button.setEnabled(False)
+        fit = QPushButton("Fit to hearing")
+        fit.setToolTip("Set the speed so the whole recorded band is audible")
+        fit.clicked.connect(self._fit_speed)
+        for b in (self.play_button, self.stop_button, fit):
+            buttons.addWidget(b)
+        holder = QWidget()
+        holder.setLayout(buttons)
+        form.addRow("", holder)
+        return box
+
     # --------------------------------------------------------------------- actions
+
+    def _status(self, text: str) -> None:
+        win = self.window()
+        if hasattr(win, "statusBar"):
+            win.statusBar().showMessage(text, 8000)
+
+    # ------------------------------------------------------------ LTSA motion actions
+
+    def _ltsa_step(self, n: int) -> None:
+        if not self.session.ltsa.is_open:
+            return
+        self.session.step_ltsa(n)
+        self._refresh_ltsa_position()
+
+    def _ltsa_start(self) -> None:
+        if self.session.ltsa.is_open:
+            self.session.ltsa_to_start()
+            self._refresh_ltsa_position()
+
+    def _ltsa_end(self) -> None:
+        if self.session.ltsa.is_open:
+            self.session.ltsa_to_end()
+            self._refresh_ltsa_position()
+
+    def _refresh_ltsa_position(self) -> None:
+        if not self.session.ltsa.is_open:
+            self.ltsa_position_label.setText("--")
+            return
+        src = self.session.ltsa_source
+        here = self.session.ltsa.position or src.start_time
+        self.ltsa_position_label.setText(
+            f"{here}  (bin {src.bin_index(here) + 1} of {src.total_bins})"
+        )
+
+    # ---------------------------------------------------------------- sound actions
+
+    def _play(self) -> None:
+        if not self.session.audio.is_open:
+            return
+        win = self.window()
+        player = getattr(win, "player", None)
+        if player is None:
+            return
+        try:
+            playable = self.session.playable(out_rate=player.default_rate())
+            player.play(playable)
+        except Exception as exc:                      # noqa: BLE001
+            # No device, no driver, a speed that leaves nothing to play. All ordinary
+            # on a compute node, and none of them worth a dialog.
+            self._status(f"cannot play: {exc}")
+            return
+        self.play_button.setEnabled(False)
+        self.stop_button.setEnabled(True)
+        note = ""
+        if playable.discarded_above_hz:
+            note = (f"; content above {playable.discarded_above_hz:,.0f} Hz not "
+                    f"audible at this speed -- try Fit to hearing")
+        self._status(
+            f"playing {playable.duration_sec:.1f} s at {playable.speed:g}x{note}"
+        )
+
+    def _stop(self) -> None:
+        player = getattr(self.window(), "player", None)
+        if player is not None:
+            player.stop()
+        self.play_button.setEnabled(True)
+        self.stop_button.setEnabled(False)
+
+    def _fit_speed(self) -> None:
+        if not self.session.audio.is_open:
+            return
+        from ..playback import suggest_speed
+        player = getattr(self.window(), "player", None)
+        rate = player.default_rate() if player is not None else 48_000
+        self.session.view.play_speed = suggest_speed(
+            self.session.audio.source.sample_rate, rate
+        )
+        self._status(f"speed set to {self.session.view.play_speed:g}x for {rate} Hz out")
 
     def _goto_typed(self) -> None:
         """Act on the go-to-time box.

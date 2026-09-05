@@ -4,22 +4,34 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "triton"
-version = "0.0.1.dev0"
+version = "0.0.3.dev0"
 description = "Python port of the Triton passive acoustic analysis package (Scripps Whale Acoustics Lab)"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
 dependencies = [
-    "numpy>=1.24",
-    "scipy>=1.10",
+    "numpy>=2.0",
+    "scipy>=1.14",
 ]
 
 [project.optional-dependencies]
-# Phase 1 adds soundfile for wav/flac; the x.wav path stays hand-rolled by design.
+# Phase 2: wav/flac via soundfile. The x.wav path stays hand-rolled by design.
 io = ["soundfile>=0.12"]
-# Phase 3.
-gui = ["PySide6>=6.6", "pyqtgraph>=0.13", "sounddevice>=0.4", "matplotlib>=3.8"]
+# Phase 3: the viewer. sounddevice is imported lazily, so a machine with no audio
+# stack can still run the GUI; it is listed here because playback needs it.
+gui = ["PySide6>=6.6", "pyqtgraph>=0.13", "sounddevice>=0.4"]
+# Phase 5: publication-quality figure export. Not used by anything yet, so it is
+# not pulled in by `gui` -- it is a large install for a feature that does not exist.
+export = ["matplotlib>=3.8"]
 dev = ["pytest>=7.4", "pytest-cov>=4.1", "ruff>=0.5"]
+# Everything, for someone who just wants it all to work.
+all = ["triton[io,gui,export,dev]"]
+
+[tool.uv]
+# The lockfile pins every transitive dependency for every extra, so `uv sync` gives
+# two people identical environments. Regenerate with `uv lock` after editing the
+# lists above; `uv lock --check` fails if pyproject and uv.lock disagree.
+default-groups = []
 
 [tool.setuptools.packages.find]
 where = ["src"]

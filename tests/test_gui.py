@@ -454,6 +454,7 @@ def test_clicking_the_ltsa_opens_the_audio_behind_it(win, app, generated_dir: Pa
     win.session.close()
     win.session.open_ltsa(generated_dir / LTSA)
     win.session.ltsa.tseg_hr = 1 / 60
+    win.session.ltsa.expand = True                 # arm click-to-open
     app.processEvents()
     assert not win.session.audio.is_open
 
@@ -714,6 +715,7 @@ def test_an_ltsa_click_logs_and_opens(win, app, generated_dir: Path):
     win.session.close()
     win.session.open_ltsa(generated_dir / LTSA)
     win.session.ltsa.tseg_hr = 1 / 60
+    win.session.ltsa.expand = True
     app.processEvents()
 
     win.panels["ltsa"].picked.emit("ltsa", 3.6 / 3600, 1000.0)
@@ -734,3 +736,73 @@ def test_copy_all_puts_the_log_on_the_clipboard(win, app):
     from PySide6.QtGui import QGuiApplication
     text = QGuiApplication.clipboard().text()
     assert text.count("\n") >= 1 and "specgram" in text
+
+
+# ------------------------------------------------------- Expand toggle, provenance stamps
+
+
+def test_ltsa_click_is_unarmed_by_default(win, app, generated_dir: Path):
+    """MATLAB's Expand check box, same default. Reading values off an LTSA is a
+    browsing activity and must not change which file is open."""
+    win.session.close()
+    win.session.open_ltsa(generated_dir / LTSA)
+    win.session.ltsa.tseg_hr = 1 / 60
+    app.processEvents()
+    assert win.session.ltsa.expand is False
+
+    win.panels["ltsa"].picked.emit("ltsa", 3.6 / 3600, 1000.0)
+    app.processEvents()
+
+    assert not win.session.audio.is_open, "an unarmed click must not open anything"
+    assert "ltsa" in win.pick_log.toPlainText(), "but it still logs the point"
+
+
+def test_expand_is_a_control_in_the_ltsa_section(win):
+    assert "ltsa.expand" in win.controls._bindings
+
+
+def test_spectrogram_stamp_carries_the_parameters_that_made_it(win, app):
+    """A screenshot that ends up in a paper should say how it was made."""
+    win.session.view.nfft = 512
+    win.session.view.overlap_pct = 25
+    win.session.view.brightness = 3.0
+    win.bridge.force()
+    app.processEvents()
+
+    title, left, right = win.panels["specgram"].stamp
+    assert XWAV in title and "CH=1" in title
+    assert left.startswith("2011-01-30T08:45:00"), left
+    for needle in ("Fs = 10,000 Hz", "NFFT = 512", "overlap 25%", "B = 3 dB", "C = 100%"):
+        assert needle in right, (needle, right)
+
+
+def test_stamp_mentions_the_band_pass_only_when_it_is_on(win, app):
+    """If the picture was filtered, the picture should say so."""
+    win.bridge.force()
+    app.processEvents()
+    assert "band-pass" not in win.panels["specgram"].stamp[2]
+
+    win.session.view.filter_on = True
+    win.session.view.filter_low, win.session.view.filter_high = 200.0, 3000.0
+    app.processEvents()
+    assert "band-pass 200-3000 Hz" in win.panels["specgram"].stamp[2]
+
+
+def test_ltsa_stamp_uses_the_ltsa_header_not_the_audio(win, app, generated_dir: Path):
+    win.session.open_ltsa(generated_dir / LTSA)
+    win.session.ltsa.tseg_hr = 1 / 60
+    win.session.ltsa.brightness = 5.0
+    win.session.view.show_ltsa = True
+    app.processEvents()
+    win.bridge.force()
+    app.processEvents()
+
+    title, left, right = win.panels["ltsa"].stamp
+    assert LTSA in title
+    assert "Tave = 1 s" in right and "NFFT = 100" in right, right
+    assert "B = 5 dB" in right, "the LTSA's own brightness, not the spectrogram's"
+
+
+def test_title_shows_the_whole_path_because_the_directory_is_the_deployment(win):
+    title = win._audio_title()
+    assert str(win.session.audio.path) in title

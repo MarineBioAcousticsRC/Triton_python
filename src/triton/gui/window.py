@@ -334,24 +334,48 @@ class MainWindow(QMainWindow):
                 return
 
         if self._frame is not None:
+            title = self._audio_title()
+            start = str(self._frame.start)
             if self.panels["specgram"].isVisible():
                 self.panels["specgram"].render(
                     self._frame, colormap=v.colormap, log_freq=v.log_freq,
                     delimiters=v.show_delimiters,
+                    stamp=(title, start,
+                           f"Fs = {self._frame.fs:,} Hz, NFFT = {v.nfft}, "
+                           f"overlap {v.overlap_pct:g}%  |  "
+                           f"B = {v.brightness:g} dB, C = {v.contrast:g}%"
+                           + ("  |  band-pass "
+                              f"{v.filter_low:g}-{v.filter_high:g} Hz"
+                              if v.filter_on else "")),
                 )
             if self.panels["timeseries"].isVisible():
                 self.panels["timeseries"].render(
-                    self._frame, delimiters=v.show_delimiters
+                    self._frame, delimiters=v.show_delimiters,
+                    stamp=(title if not self.panels["specgram"].isVisible() else "",
+                           start, f"Fs = {self._frame.fs:,} Hz"
+                           + ("  |  band-pass "
+                              f"{v.filter_low:g}-{v.filter_high:g} Hz"
+                              if v.filter_on else "")),
                 )
             if self.panels["spectra"].isVisible():
                 self.panels["spectra"].render(
-                    self._frame, log_freq=v.log_freq, freq0=v.freq0, freq1=v.freq1
+                    self._frame, log_freq=v.log_freq, freq0=v.freq0, freq1=v.freq1,
+                    stamp=("", f"{start}  ({v.tseg_sec:g} s averaged)",
+                           f"NFFT = {v.nfft}, overlap {v.overlap_pct:g}%"),
                 )
 
         if self.panels["ltsa"].isVisible() and self.session.ltsa.is_open:
             try:
-                self.panels["ltsa"].render(self.session.ltsa_tile(),
-                                           colormap=self.session.ltsa.colormap)
+                lt = self.session.ltsa
+                h = lt.source.header
+                tile = self.session.ltsa_tile()
+                self.panels["ltsa"].render(
+                    tile, colormap=lt.colormap,
+                    stamp=(f"{lt.path}   CH={h.channel}" if lt.path else "",
+                           str(tile.start),
+                           f"Fs = {h.fs:,} Hz, Tave = {h.tave:g} s, NFFT = {h.nfft}  |  "
+                           f"B = {lt.brightness:g} dB, C = {lt.contrast:g}%"),
+                )
             except Exception as exc:                  # noqa: BLE001
                 self.statusBar().showMessage(str(exc), 8000)
 
@@ -408,10 +432,15 @@ class MainWindow(QMainWindow):
             self.picks_dock.setVisible(True)
 
     def _on_pick(self, kind: str, x: float, y: float) -> None:
-        """A click: log the point if logging is on; on the LTSA, also open the audio."""
+        """A click: log the point if logging is on; on the LTSA, open the audio if armed.
+
+        Two independent modes, as in MATLAB (Pickxyz and Expand), because they serve
+        different moments. Reading values off an LTSA is a browsing activity and
+        should not change which file is open; jumping into the audio is a decision.
+        """
         if self.controls.log_picks.isChecked():
             self._log_pick(kind, x, y)
-        if kind != "ltsa" or not self.session.ltsa.is_open:
+        if kind != "ltsa" or not self.session.ltsa.is_open or not self.session.ltsa.expand:
             return
         try:
             t = self.session.open_from_ltsa(x)
@@ -441,6 +470,16 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(
             f"{self.session.audio.path.name} at {t}", 6000
         )
+
+    def _audio_title(self) -> str:
+        """Full path plus channel, as MATLAB's plot title.
+
+        The whole path rather than the file name, deliberately: the directory is the
+        deployment, and a screenshot that says which deployment it came from is worth
+        the title being long.
+        """
+        p = self.session.audio.path
+        return f"{p}   CH={self.session.view.channel}" if p else ""
 
     def closeEvent(self, event) -> None:              # noqa: N802 -- Qt naming
         self.player.stop()

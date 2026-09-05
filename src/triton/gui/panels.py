@@ -116,6 +116,34 @@ class _Panel(pg.PlotWidget):
         self.scene().sigMouseMoved.connect(self._mouse_moved)
         self.scene().sigMouseClicked.connect(self._mouse_clicked)
 
+        # Provenance stamps, in the row below the bottom axis. MATLAB writes the start
+        # time bottom-left and the parameters bottom-right of every panel, and the
+        # reason is worth keeping: a screenshot of a spectrogram ends up in a paper, a
+        # thesis, or a Slack thread, and this is what makes it self-documenting --
+        # the fs, nfft and colour settings that produced it travel with the picture.
+        self._stamp = pg.LabelItem(justify="left", size="8pt", color="#333")
+        self.getPlotItem().layout.addItem(self._stamp, 4, 1)
+        self._stamp_parts: tuple[str, str, str] = ("", "", "")
+
+    def set_stamp(self, title: str = "", left: str = "", right: str = "") -> None:
+        """Title above, start time bottom-left, parameters bottom-right."""
+        self._stamp_parts = (title, left, right)
+        self.getPlotItem().setTitle(title or None, size="9pt", color="#222")
+        # One label, two cells: a table is the only way a QGraphicsTextItem can
+        # left- and right-justify on the same line.
+        self._stamp.setText(
+            f'<table width="100%"><tr>'
+            f'<td align="left">{left}</td>'
+            f'<td align="right">{right}</td>'
+            f"</tr></table>"
+        )
+
+    @property
+    def stamp(self) -> tuple[str, str, str]:
+        """``(title, left, right)`` as last set -- for tests, since text is unreadable
+        offscreen."""
+        return self._stamp_parts
+
     def _to_data(self, scene_pos) -> tuple[float, float] | None:
         """Scene coordinates to data coordinates, or None if outside the plot."""
         vb = self.getPlotItem().getViewBox()
@@ -238,7 +266,10 @@ class SpectrogramPanel(_ImagePanel):
     kind = "specgram"
 
     def render(self, frame: Frame, colormap: str = "jet", log_freq: bool = False,
-               delimiters: bool = True) -> None:
+               delimiters: bool = True, stamp: tuple[str, str, str] | None = None
+               ) -> None:
+        if stamp:
+            self.set_stamp(*stamp)
         tile = frame.spectrogram
         x_max = float(frame.samples.shape[0]) / frame.fs
         nfft = int(round(frame.fs / (tile.f[1] - tile.f[0]))) if tile.f.size > 1 else 0
@@ -255,7 +286,10 @@ class LtsaPanel(_ImagePanel):
 
     kind = "ltsa"
 
-    def render(self, tile: LtsaTile, colormap: str = "jet") -> None:
+    def render(self, tile: LtsaTile, colormap: str = "jet",
+               stamp: tuple[str, str, str] | None = None) -> None:
+        if stamp:
+            self.set_stamp(*stamp)
         x_max = float(tile.t[-1]) if tile.t.size else 1.0
         self._show(tile.db, x_max, tile.f, tile.clim, colormap, log_freq=False)
         self.getPlotItem().setLabel("bottom", "Time", units="hr")
@@ -273,7 +307,10 @@ class TimeSeriesPanel(_Panel):
         super().__init__(parent)
         self.curve = self.plot(pen=pg.mkPen(QColor(0, 0, 160), width=1))
 
-    def render(self, frame: Frame, delimiters: bool = True) -> None:
+    def render(self, frame: Frame, delimiters: bool = True,
+               stamp: tuple[str, str, str] | None = None) -> None:
+        if stamp:
+            self.set_stamp(*stamp)
         x = frame.time_axis
         y = frame.samples[:, frame.channel - 1]
         # A full window at 200 kHz is millions of points and Qt will draw every one.
@@ -310,7 +347,10 @@ class SpectraPanel(_Panel):
         self.getPlotItem().setLabel("bottom", "Frequency", units="Hz")
 
     def render(self, frame: Frame, log_freq: bool = False,
-               freq0: float = 0.0, freq1: float | None = None) -> None:
+               freq0: float = 0.0, freq1: float | None = None,
+               stamp: tuple[str, str, str] | None = None) -> None:
+        if stamp:
+            self.set_stamp(*stamp)
         f, db = frame.spectra_f, frame.spectra_db
         if f.size == 0:
             self.curve.setData([], [])

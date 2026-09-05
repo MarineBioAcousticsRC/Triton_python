@@ -361,10 +361,13 @@ class ControlPanel(QWidget):
         g.addWidget(_row_label("Colour"), r, 0)
         g.addWidget(self._combo(f"{pre}.colormap", COLORMAPS), r, 1)
         if is_ltsa:
-            reset = QPushButton("Auto range")
-            reset.setToolTip("LTSA colour range follows the data each window")
-            reset.setEnabled(False)
-            g.addWidget(reset, r, 2)
+            expand = self._check("ltsa.expand", "Expand")
+            expand.setToolTip(
+                "When on, clicking the LTSA opens the audio recording behind that\n"
+                "point and jumps to it. Off, a click only records the point in the\n"
+                "pick log, so you can read values without changing what is open."
+            )
+            g.addWidget(expand, r, 2, 1, 2)
         else:
             reset = QPushButton("Re-derive range")
             reset.setToolTip("Recompute the colour range from this window.\n"

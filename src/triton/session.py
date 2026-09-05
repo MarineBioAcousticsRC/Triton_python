@@ -304,6 +304,11 @@ class LtsaState(_State):
     contrast: float = 100.0
     colormap: str = "jet"
     position: np.datetime64 | None = None
+    #: Arms click-to-open: with this on, clicking the LTSA opens the audio behind the
+    #: point. MATLAB's "Expand" check box, same name, same default (off). It is a mode
+    #: rather than always-on because analysts click around an LTSA to *read* it, and an
+    #: unarmed click that changes which file is open is a surprise every time.
+    expand: bool = False
 
     _validators = {"tseg_hr": _positive, "freq0": _non_negative, "contrast": _positive}
 

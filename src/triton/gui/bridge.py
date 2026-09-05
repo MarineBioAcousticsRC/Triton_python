@@ -95,6 +95,7 @@ _RULES: tuple[tuple[str, Dirty], ...] = (
     # a layout change as well. Must precede the general "ltsa." rule, which is a
     # prefix match taken in order.
     ("ltsa.source", Dirty.LTSA | Dirty.LAYOUT),
+    ("ltsa.expand", Dirty.NOTHING),             # a mode, draws nothing
     ("ltsa.", Dirty.LTSA),
     ("config.", Dirty.NOTHING),
 )

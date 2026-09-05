@@ -33,6 +33,7 @@ __all__ = [
     "TimeSeriesPanel",
     "SpectraPanel",
     "colormap_lut",
+    "pg_colormap",
 ]
 
 #: Fixed stacking order, top to bottom -- ``plot_triton.m:44-70``.
@@ -63,6 +64,19 @@ _MAPS: dict[str, list[tuple[float, tuple[int, int, int]]]] = {
         (1.0, (255, 255, 255)),
     ],
 }
+
+
+def pg_colormap(name: str) -> pg.ColorMap:
+    """The same control points as :func:`colormap_lut`, as a pyqtgraph ColorMap.
+
+    One source of truth for both: the image LUT and the colour bar beside it must agree,
+    and building them from the same list is how that stays true.
+    """
+    pts = _MAPS.get(name) or _MAPS["jet"]
+    return pg.ColorMap(
+        pos=np.array([p for p, _ in pts]),
+        color=np.array([(*c, 255) for _, c in pts], dtype=np.ubyte),
+    )
 
 
 def colormap_lut(name: str, n: int = 256) -> np.ndarray:
@@ -152,10 +166,20 @@ class _ImagePanel(_Panel):
         self.image = pg.ImageItem()
         self.addItem(self.image)
         self._lut_name: str | None = None
+        # A spectrogram without a scale is a picture, not a measurement. The bar owns
+        # the colour map and drives the image's lookup table, so the two cannot
+        # disagree. Not interactive: the colour range is the session's to hold (issue
+        # #111), so dragging the bar would fight the policy that keeps levels
+        # comparable from one window to the next.
+        self.colorbar = pg.ColorBarItem(
+            values=(0.0, 1.0), width=14, interactive=False,
+            label="dB re counts\u00b2/Hz",
+        )
+        self.colorbar.setImageItem(self.image, insert_in=self.getPlotItem())
 
     def _set_colormap(self, name: str) -> None:
         if name != self._lut_name:
-            self.image.setLookupTable(colormap_lut(name))
+            self.colorbar.setColorMap(pg_colormap(name))
             self._lut_name = name
 
     def _show(self, db: np.ndarray, x_max: float, f: np.ndarray,
@@ -180,7 +204,8 @@ class _ImagePanel(_Panel):
         # NaN reads as "no data here" -- a duty-cycle gap in gap-aware mode, or a
         # truncated LTSA. Left transparent rather than mapped to an end of the colour
         # scale, where it would look like real data at an extreme level.
-        self.image.setImage(db, levels=clim, autoLevels=False)
+        self.image.setImage(db, autoLevels=False)
+        self.colorbar.setLevels(clim)
         self.image.setRect(QRectF(0.0, y0, x_max, max(y1 - y0, 1e-9)))
         self.getPlotItem().setLogMode(x=False, y=log_freq)
         self.setXRange(0.0, x_max, padding=0)

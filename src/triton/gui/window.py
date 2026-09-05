@@ -17,13 +17,16 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QAction, QKeySequence
+from PySide6.QtGui import QAction, QGuiApplication, QKeySequence
 from PySide6.QtWidgets import (
     QDockWidget,
     QFileDialog,
+    QHBoxLayout,
     QLabel,
     QMainWindow,
     QMessageBox,
+    QPlainTextEdit,
+    QPushButton,
     QScrollArea,
     QSplitter,
     QStatusBar,
@@ -104,6 +107,37 @@ class MainWindow(QMainWindow):
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
         self.controls_dock = dock
 
+        # The pick log: MATLAB's Pickxyz text area, as a dock rather than a third
+        # window. Read-only but selectable, so a run of points can be copied out --
+        # which is what it is for. Tab-separated so it pastes straight into a
+        # spreadsheet.
+        self.pick_log = QPlainTextEdit()
+        self.pick_log.setReadOnly(True)
+        self.pick_log.setMaximumBlockCount(5000)
+        self.pick_log.setPlaceholderText(
+            "Click a panel to record the point under the cursor here.\n"
+            "Columns: time, frequency (Hz), level (dB) or counts, panel, raw file, file."
+        )
+        pick_widget = QWidget()
+        pv = QVBoxLayout(pick_widget)
+        pv.setContentsMargins(2, 2, 2, 2)
+        pv.addWidget(self.pick_log)
+        pick_buttons = QHBoxLayout()
+        copy_all = QPushButton("Copy all")
+        copy_all.clicked.connect(self._copy_picks)
+        clear = QPushButton("Clear")
+        clear.clicked.connect(self.pick_log.clear)
+        pick_buttons.addWidget(copy_all)
+        pick_buttons.addWidget(clear)
+        pick_buttons.addStretch(1)
+        pv.addLayout(pick_buttons)
+        self.picks_dock = QDockWidget("Picks", self)
+        self.picks_dock.setWidget(pick_widget)
+        self.picks_dock.setAllowedAreas(Qt.DockWidgetArea.BottomDockWidgetArea
+                                        | Qt.DockWidgetArea.TopDockWidgetArea)
+        self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self.picks_dock)
+        self.picks_dock.setVisible(False)          # appears on the first pick
+
         #: One player for the window. Constructed eagerly but it touches no audio
         #: device until asked to play, so a machine with no sound stack is fine.
         self.player = Player()
@@ -155,6 +189,7 @@ class MainWindow(QMainWindow):
             self.addAction(act)
         view_menu.addSeparator()
         view_menu.addAction(self.controls_dock.toggleViewAction())
+        view_menu.addAction(self.picks_dock.toggleViewAction())
 
         sound_menu = self.menuBar().addMenu("&Sound")
         for label, keys, fn in (
@@ -315,7 +350,8 @@ class MainWindow(QMainWindow):
 
         if self.panels["ltsa"].isVisible() and self.session.ltsa.is_open:
             try:
-                self.panels["ltsa"].render(self.session.ltsa_tile(), colormap=v.colormap)
+                self.panels["ltsa"].render(self.session.ltsa_tile(),
+                                           colormap=self.session.ltsa.colormap)
             except Exception as exc:                  # noqa: BLE001
                 self.statusBar().showMessage(str(exc), 8000)
 
@@ -341,8 +377,40 @@ class MainWindow(QMainWindow):
             return
         self.controls.show_readout(readout)
 
+    def _copy_picks(self) -> None:
+        QGuiApplication.clipboard().setText(self.pick_log.toPlainText())
+        self.statusBar().showMessage("picks copied", 3000)
+
+    def _log_pick(self, kind: str, x: float, y: float) -> None:
+        """Append the point under the cursor to the pick log, tab-separated."""
+        try:
+            if kind == "ltsa":
+                if not self.session.ltsa.is_open:
+                    return
+                r = self.session.probe_ltsa(self.session.ltsa_tile(), x, y)
+            else:
+                if self._frame is None:
+                    return
+                r = self.session.probe(self._frame, kind, x, y)
+        except Exception:                             # noqa: BLE001
+            return
+        cols = [
+            str(r.time) if r.time is not None else "",
+            f"{r.frequency:.1f}" if r.frequency is not None else "",
+            f"{r.value:.1f}" if r.value is not None else "",
+            r.panel,
+            str(r.segment + 1) if r.segment is not None else "",
+            r.source_file or (self.session.audio.path.name
+                              if self.session.audio.path else ""),
+        ]
+        self.pick_log.appendPlainText("\t".join(cols))
+        if not self.picks_dock.isVisible():
+            self.picks_dock.setVisible(True)
+
     def _on_pick(self, kind: str, x: float, y: float) -> None:
-        """A click. On the LTSA it opens the audio behind the point."""
+        """A click: log the point if logging is on; on the LTSA, also open the audio."""
+        if self.controls.log_picks.isChecked():
+            self._log_pick(kind, x, y)
         if kind != "ltsa" or not self.session.ltsa.is_open:
             return
         try:

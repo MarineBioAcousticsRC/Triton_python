@@ -625,3 +625,112 @@ def test_fit_to_hearing_sets_a_speed_that_keeps_the_whole_band(win, app, monkeyp
     fs = win.session.audio.source.sample_rate
     speed = win.session.view.play_speed
     assert (48_000 / 2) / speed >= fs / 2 - 1, "the whole band should fit"
+
+
+# ------------------------------------------- grid panel, sliders, colour bars, pick log
+
+
+def test_slider_and_spin_box_are_bound_to_the_same_field(win, app):
+    """Drag to explore, type for precision -- both must move the one value."""
+    bindings = win.controls._bindings["view.brightness"]
+    assert len(bindings) == 2, "a slider and a spin box"
+    slider = next(b for b in bindings if "QSlider" in type(b.parent()).__name__)
+    spin = next(b for b in bindings if b is not slider)
+
+    slider.set(12.0)
+    slider._widget_changed()
+    assert win.session.view.brightness == 12.0
+    app.processEvents()
+    assert spin.get() == 12.0, "the spin box must follow the slider"
+
+    spin.set(-7.0)
+    spin._widget_changed()
+    assert win.session.view.brightness == -7.0
+    app.processEvents()
+    assert slider.get() == -7.0, "and the slider must follow the spin box"
+
+
+def test_the_two_sections_mirror_each_other(win):
+    """Same rows in the same order, so learning one teaches the other."""
+    for field in ("freq0", "freq1", "brightness", "contrast", "colormap"):
+        assert f"view.{field}" in win.controls._bindings, field
+        assert f"ltsa.{field}" in win.controls._bindings, field
+
+
+def test_the_control_panel_is_no_longer_taller_than_a_screen(win):
+    """The old form layout wanted 1020 px. A laptop has about 700 usable."""
+    assert win.controls.sizeHint().height() < 820, win.controls.sizeHint().height()
+
+
+def test_colour_bar_tracks_the_image_levels(win, app):
+    win.session.view.tseg_sec = 0.5
+    win.bridge.force()
+    app.processEvents()
+    panel = win.panels["specgram"]
+    lo, hi = panel.colorbar.levels()
+    assert (lo, hi) == win._frame.spectrogram.clim
+
+
+def test_colour_bar_and_image_share_one_colour_map(win, app):
+    """Built from the same control points, so they cannot disagree."""
+    from triton.gui.panels import colormap_lut, pg_colormap
+    for name in ("jet", "grey", "hot"):
+        bar = pg_colormap(name).getLookupTable(nPts=256)[:, :3]
+        lut = colormap_lut(name)
+        assert np.abs(bar.astype(int) - lut.astype(int)).max() <= 1, name
+
+
+def test_a_click_appends_a_tab_separated_pick(win, app):
+    win.session.view.tseg_sec = 1.0
+    win.bridge.force()
+    app.processEvents()
+    assert win.pick_log.toPlainText() == ""
+
+    win.panels["specgram"].picked.emit("specgram", 0.5, 2000.0)
+    app.processEvents()
+
+    lines = win.pick_log.toPlainText().splitlines()
+    assert len(lines) == 1
+    cols = lines[0].split("\t")
+    assert len(cols) == 6, cols
+    assert cols[0].startswith("2011-01-30T08:45:00.5"), "time"
+    assert cols[3] == "specgram", "panel"
+    assert cols[5] == XWAV, "source file"
+    assert win.picks_dock.isVisible(), "the log appears on the first pick"
+
+
+def test_pick_logging_can_be_turned_off(win, app):
+    win.bridge.force()
+    app.processEvents()
+    win.controls.log_picks.setChecked(False)
+    win.panels["specgram"].picked.emit("specgram", 0.5, 2000.0)
+    app.processEvents()
+    assert win.pick_log.toPlainText() == ""
+
+
+def test_an_ltsa_click_logs_and_opens(win, app, generated_dir: Path):
+    """Both, in that order -- the log line should describe the LTSA point clicked,
+    not the audio window it then opened."""
+    win.session.close()
+    win.session.open_ltsa(generated_dir / LTSA)
+    win.session.ltsa.tseg_hr = 1 / 60
+    app.processEvents()
+
+    win.panels["ltsa"].picked.emit("ltsa", 3.6 / 3600, 1000.0)
+    app.processEvents()
+
+    cols = win.pick_log.toPlainText().splitlines()[0].split("\t")
+    assert cols[3] == "ltsa"
+    assert win.session.audio.is_open, "and the audio opened"
+
+
+def test_copy_all_puts_the_log_on_the_clipboard(win, app):
+    win.bridge.force()
+    app.processEvents()
+    win.panels["specgram"].picked.emit("specgram", 0.5, 2000.0)
+    win.panels["specgram"].picked.emit("specgram", 0.6, 3000.0)
+    app.processEvents()
+    win._copy_picks()
+    from PySide6.QtGui import QGuiApplication
+    text = QGuiApplication.clipboard().text()
+    assert text.count("\n") >= 1 and "specgram" in text

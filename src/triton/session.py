@@ -302,6 +302,7 @@ class LtsaState(_State):
     freq1: float | None = None
     brightness: float = 0.0
     contrast: float = 100.0
+    colormap: str = "jet"
     position: np.datetime64 | None = None
 
     _validators = {"tseg_hr": _positive, "freq0": _non_negative, "contrast": _positive}

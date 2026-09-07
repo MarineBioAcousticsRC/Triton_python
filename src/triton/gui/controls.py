@@ -47,12 +47,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ..colormaps import COLORMAPS
 from ..session import _TIME_FORMS, TritonSession, ValidationError
 from .bridge import SessionBridge
 
-__all__ = ["ControlPanel", "COLORMAPS"]
-
-COLORMAPS = ("jet", "grey", "inverse grey", "hot", "bone")
+__all__ = ["ControlPanel"]
 
 
 class _Binding(QObject):

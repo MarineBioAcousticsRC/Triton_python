@@ -22,7 +22,7 @@ Two things a newcomer should read before changing anything here:
 `tests/test_session.py` additionally asserts that the session layer changes no numbers.
 """
 
-from . import dsp, io, session, timebase
+from . import colormaps, dsp, export, io, session, timebase
 from .session import (
     TritonSession,
     current_session,
@@ -35,6 +35,8 @@ __version__ = "0.0.2.dev0"
 __all__ = [
     "io",
     "dsp",
+    "export",
+    "colormaps",
     "timebase",
     "session",
     "TritonSession",

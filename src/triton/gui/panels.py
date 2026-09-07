@@ -24,6 +24,7 @@ from PySide6.QtGui import QColor, QPen
 from PySide6.QtWidgets import QWidget
 
 from .. import dsp
+from ..colormaps import MAPS, colormap_lut
 from ..session import Frame, LtsaTile
 
 __all__ = [
@@ -44,51 +45,17 @@ pg.setConfigOption("background", "w")
 pg.setConfigOption("foreground", "k")
 
 
-#: Colour maps as control points, so no matplotlib dependency is needed for the one
-#: map everyone actually uses. `jet` is what Triton defaults to and what every existing
-#: figure in the lab's papers was made with, so it has to be here and it has to look
-#: right; the others are offered because analysts asked for them over the years.
-_MAPS: dict[str, list[tuple[float, tuple[int, int, int]]]] = {
-    "jet": [
-        (0.000, (0, 0, 143)), (0.125, (0, 0, 255)), (0.375, (0, 255, 255)),
-        (0.625, (255, 255, 0)), (0.875, (255, 0, 0)), (1.000, (128, 0, 0)),
-    ],
-    "grey": [(0.0, (0, 0, 0)), (1.0, (255, 255, 255))],
-    "inverse grey": [(0.0, (255, 255, 255)), (1.0, (0, 0, 0))],
-    "hot": [
-        (0.0, (0, 0, 0)), (0.365, (255, 0, 0)), (0.746, (255, 255, 0)),
-        (1.0, (255, 255, 255)),
-    ],
-    "bone": [
-        (0.0, (0, 0, 0)), (0.376, (81, 81, 113)), (0.753, (166, 198, 198)),
-        (1.0, (255, 255, 255)),
-    ],
-}
-
-
 def pg_colormap(name: str) -> pg.ColorMap:
-    """The same control points as :func:`colormap_lut`, as a pyqtgraph ColorMap.
+    """The core's control points as a pyqtgraph ColorMap, for the colour bars.
 
-    One source of truth for both: the image LUT and the colour bar beside it must agree,
-    and building them from the same list is how that stays true.
+    Same definition as :func:`triton.colormaps.colormap_lut` builds its table from, so
+    a bar cannot disagree with the image beside it.
     """
-    pts = _MAPS.get(name) or _MAPS["jet"]
+    pts = MAPS.get(name) or MAPS["jet"]
     return pg.ColorMap(
         pos=np.array([p for p, _ in pts]),
         color=np.array([(*c, 255) for _, c in pts], dtype=np.ubyte),
     )
-
-
-def colormap_lut(name: str, n: int = 256) -> np.ndarray:
-    """An ``n`` x 3 uint8 lookup table for one of the named maps."""
-    pts = _MAPS.get(name) or _MAPS["jet"]
-    xs = np.array([p for p, _ in pts])
-    cols = np.array([c for _, c in pts], dtype=float)
-    grid = np.linspace(0.0, 1.0, n)
-    lut = np.empty((n, 3), dtype=np.uint8)
-    for k in range(3):
-        lut[:, k] = np.interp(grid, xs, cols[:, k]).round().astype(np.uint8)
-    return lut
 
 
 class _Panel(pg.PlotWidget):

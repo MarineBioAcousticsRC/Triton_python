@@ -361,13 +361,19 @@ class ControlPanel(QWidget):
         g.addWidget(_row_label("Colour"), r, 0)
         g.addWidget(self._combo(f"{pre}.colormap", COLORMAPS), r, 1)
         if is_ltsa:
+            reset = QPushButton("Re-derive range")
+            reset.setToolTip("Recompute the colour range from this window.\n"
+                             "It is otherwise held while you scroll, so levels stay\n"
+                             "comparable from one window to the next.")
+            reset.clicked.connect(self._reset_ltsa_clim)
+            g.addWidget(reset, r, 2)
             expand = self._check("ltsa.expand", "Expand")
             expand.setToolTip(
                 "When on, clicking the LTSA opens the audio recording behind that\n"
                 "point and jumps to it. Off, a click only records the point in the\n"
                 "pick log, so you can read values without changing what is open."
             )
-            g.addWidget(expand, r, 2, 1, 2)
+            g.addWidget(expand, r, 3)
         else:
             reset = QPushButton("Re-derive range")
             reset.setToolTip("Recompute the colour range from this window.\n"
@@ -574,6 +580,9 @@ class ControlPanel(QWidget):
 
     def _reset_clim(self) -> None:
         self.session.view.clim = None
+
+    def _reset_ltsa_clim(self) -> None:
+        self.session.ltsa.clim = None
 
     def _refresh_readouts(self) -> None:
         if not self.session.audio.is_open:

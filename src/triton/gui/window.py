@@ -70,11 +70,10 @@ class MainWindow(QMainWindow):
         self.splitter = QSplitter(Qt.Orientation.Vertical)
         for name in PANEL_ORDER:
             self.splitter.addWidget(self.panels[name])
-        #: Remembered heights, so a panel toggled off and on again comes back the size
-        #: it was. A QSplitter gives a re-shown widget a near-zero height otherwise,
-        #: which is why toggling a panel used to leave it as a sliver needing a manual
-        #: drag -- and why it looked right on first open, when no panel had been hidden.
-        self._panel_heights: dict[str, int] = {}
+        #: Which panels were visible last time the layout was applied. Sizes are only
+        #: redistributed when this *changes*, so a manual drag survives any repaint
+        #: that happens to carry a layout flag.
+        self._visible_set: tuple[str, ...] = ()
 
         self.empty_label = QLabel("No plot type selected")
         self.empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -133,9 +132,18 @@ class MainWindow(QMainWindow):
         pv.addLayout(pick_buttons)
         self.picks_dock = QDockWidget("Picks", self)
         self.picks_dock.setWidget(pick_widget)
-        self.picks_dock.setAllowedAreas(Qt.DockWidgetArea.BottomDockWidgetArea
-                                        | Qt.DockWidgetArea.TopDockWidgetArea)
-        self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self.picks_dock)
+        # Under the controls, in the same column, rather than across the bottom of the
+        # window. In the bottom dock area it spanned the full width and took its height
+        # from the plots -- too prominent for something used occasionally. Splitting the
+        # controls column means it only ever costs control-panel space.
+        self.picks_dock.setAllowedAreas(
+            Qt.DockWidgetArea.RightDockWidgetArea | Qt.DockWidgetArea.LeftDockWidgetArea
+            | Qt.DockWidgetArea.BottomDockWidgetArea
+        )
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.picks_dock)
+        self.splitDockWidget(dock, self.picks_dock, Qt.Orientation.Vertical)
+        self.resizeDocks([dock, self.picks_dock], [640, 200],
+                         Qt.Orientation.Vertical)
         self.picks_dock.setVisible(False)          # appears on the first pick
 
         #: One player for the window. Constructed eagerly but it touches no audio
@@ -264,14 +272,15 @@ class MainWindow(QMainWindow):
             "timeseries": v.show_timeseries and self.session.audio.is_open,
             "spectra": v.show_spectra and self.session.audio.is_open,
         }
-        # Remember what is on screen now, before anything is hidden.
-        for name, size in zip(PANEL_ORDER, self.splitter.sizes(), strict=False):
-            if self.panels[name].isVisible() and size > 0:
-                self._panel_heights[name] = size
-
         for name, panel in self.panels.items():
             panel.setVisible(wanted[name])
-        self._restore_heights(wanted)
+
+        # Only when the set of visible panels changes -- otherwise a repaint would
+        # stomp a manual drag.
+        now = tuple(n for n in PANEL_ORDER if wanted[n])
+        if now != self._visible_set:
+            self._visible_set = now
+            self._share_equally(now)
         any_shown = any(wanted.values())
         self.splitter.setVisible(any_shown)
         # plot_triton.m:36-38 shows a logo and says "No plot type selected". Saying so
@@ -282,30 +291,26 @@ class MainWindow(QMainWindow):
         elif not any_shown:
             self.empty_label.setText("No plot type selected")
 
-    def _restore_heights(self, wanted: dict[str, bool]) -> None:
-        """Give each visible panel back the height it had, or a fair share if it is new.
+    def _share_equally(self, visible: tuple[str, ...]) -> None:
+        """Split the available height equally between the visible panels.
 
-        A QSplitter does not remember the size of a widget that was hidden, so without
-        this a re-shown panel returns as a few pixels and has to be dragged open. Panels
-        that were never sized get an equal share of whatever is left, which is what they
-        would have had on a fresh window.
+        What ``plot_triton.m`` does -- ``subplot(m, 1, k)`` gives every panel the same
+        height -- and what makes toggling predictable.
+
+        An earlier version tried to remember each panel's height and give it back. That
+        fixed one bug and caused a worse one: the panels already on screen kept their
+        full heights, so there was nothing left to give a newly shown panel and it
+        arrived at the 80 px floor. Reported from use as panels "starting out
+        compressed". Equal shares cannot do that, and a manual drag is still safe
+        because this only runs when the visible set changes.
         """
-        visible = [n for n in PANEL_ORDER if wanted[n]]
         if not visible:
             return
-        total = self.splitter.height() or sum(self._panel_heights.values()) or 600
-        known = {n: self._panel_heights.get(n) for n in visible}
-        missing = [n for n, h in known.items() if not h]
-        spoken_for = sum(h for h in known.values() if h)
-        share = max((total - spoken_for) // max(len(missing), 1), 80) if missing else 0
-
-        sizes = []
-        for name in PANEL_ORDER:
-            if not wanted[name]:
-                sizes.append(0)
-            else:
-                sizes.append(known[name] or share)
-        self.splitter.setSizes(sizes)
+        total = self.splitter.height() or 600
+        share = total // len(visible)
+        self.splitter.setSizes(
+            [share if n in visible else 0 for n in PANEL_ORDER]
+        )
 
     def _repaint(self, flags: Dirty) -> None:
         """Honour the most expensive flag we were given, and no more."""

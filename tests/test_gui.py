@@ -508,29 +508,56 @@ def test_a_bad_goto_entry_reports_and_keeps_the_text(win, app):
     assert win.statusBar().currentMessage() != ""
 
 
-def test_toggling_a_panel_off_and_on_restores_its_height(win, app):
-    """A QSplitter gives a re-shown widget a near-zero height, so a toggled panel used
-    to come back as a sliver needing a manual drag."""
+def _visible_sizes(win):
+    return {n: v for n, v in zip(PANEL_ORDER, win.splitter.sizes(), strict=False)
+            if win.panels[n].isVisible()}
+
+
+def test_toggling_a_panel_splits_the_height_equally(win, app):
+    """What plot_triton.m does -- subplot(m,1,k) gives every panel the same height.
+
+    This replaces a test that asserted a toggled panel got its *previous* height back.
+    That behaviour was implemented and reported from use as panels "starting out
+    compressed": the panels already on screen kept their full heights, leaving nothing
+    for a newly shown one, which then arrived at the 80 px floor. Equal shares cannot
+    do that.
+    """
     with win.session.batch():
         win.session.view.show_specgram = True
-        win.session.view.show_timeseries = True
+        win.session.view.show_timeseries = False
+        win.session.view.show_spectra = False
     app.processEvents()
-    before = dict(zip(PANEL_ORDER, win.splitter.sizes(), strict=False))
-    assert before["timeseries"] > 50, "fixture assumption: it starts with real height"
+
+    for field in ("show_timeseries", "show_spectra"):
+        setattr(win.session.view, field, True)
+        app.processEvents()
+        sizes = _visible_sizes(win)
+        assert min(sizes.values()) > 80, f"a panel arrived compressed: {sizes}"
+        assert max(sizes.values()) - min(sizes.values()) <= 4, sizes
 
     win.session.view.show_timeseries = False
     app.processEvents()
-    win.session.view.show_timeseries = True
+    sizes = _visible_sizes(win)
+    assert max(sizes.values()) - min(sizes.values()) <= 4, sizes
+
+
+def test_a_manual_resize_survives_repaints(win, app):
+    """Sizes are only redistributed when the visible *set* changes, so a drag is not
+    stomped by an ordinary redraw."""
+    with win.session.batch():
+        win.session.view.show_specgram = True
+        win.session.view.show_spectra = True
     app.processEvents()
 
-    after = dict(zip(PANEL_ORDER, win.splitter.sizes(), strict=False))
-    # Within a few pixels rather than exact: a QSplitter redistributes handle widths
-    # when the visible set changes, so the restored height lands close but not equal.
-    # The bug being guarded against returned single-digit heights, so the tolerance has
-    # plenty of room to catch a regression.
-    assert abs(after["timeseries"] - before["timeseries"]) <= 6, (
-        f"{after['timeseries']} vs {before['timeseries']}"
-    )
+    win.splitter.setSizes([0, 500, 0, 200])
+    app.processEvents()
+    dragged = win.splitter.sizes()
+
+    win.session.view.brightness = 4.0        # DISPLAY
+    app.processEvents()
+    win.session.view.nfft = 512              # DATA
+    app.processEvents()
+    assert win.splitter.sizes() == dragged
 
 
 def test_log_frequency_does_not_produce_absurd_axis_limits(win, app):
@@ -806,3 +833,108 @@ def test_ltsa_stamp_uses_the_ltsa_header_not_the_audio(win, app, generated_dir: 
 def test_title_shows_the_whole_path_because_the_directory_is_the_deployment(win):
     title = win._audio_title()
     assert str(win.session.audio.path) in title
+
+
+# --------------------------------------------------- fixes from the second use round
+
+
+def test_picks_dock_sits_under_the_controls(win):
+    """Not across the bottom of the window.
+
+    In the bottom dock area it spanned the full width and took its height from the
+    plots, which is too prominent for something used occasionally. In the controls
+    column it only ever costs control-panel space.
+    """
+    assert win.dockWidgetArea(win.picks_dock) == win.dockWidgetArea(win.controls_dock)
+    assert not win.picks_dock.isVisible(), "and it stays out of the way until used"
+
+
+def test_ltsa_brightness_changes_the_image_not_just_the_colour_bar(
+        win, app, generated_dir: Path):
+    """The bug reported from use.
+
+    ltsa_tile re-derived the colour range from data it had just shifted by brightness,
+    so the range moved with the data and the picture came out identical -- only the
+    numbers printed on the colour bar changed. The range is now held, exactly as
+    view.clim is for the audio spectrogram.
+    """
+    win.session.open_ltsa(generated_dir / LTSA)
+    win.session.ltsa.tseg_hr = 1 / 60
+    win.session.view.show_ltsa = True
+    app.processEvents()
+    win.bridge.force()
+    app.processEvents()
+
+    before = win.panels["ltsa"].image.image.copy()
+    before_levels = win.panels["ltsa"].colorbar.levels()
+
+    win.session.ltsa.brightness = 20.0
+    app.processEvents()
+
+    after = win.panels["ltsa"].image.image
+    assert not np.allclose(before, after), "the image must change"
+    assert win.panels["ltsa"].colorbar.levels() == before_levels, \
+        "and the range must be held, or the change cancels itself out"
+    assert float(after.mean() - before.mean()) == pytest.approx(20.0, abs=0.01)
+
+
+def test_ltsa_contrast_changes_the_image(win, app, generated_dir: Path):
+    win.session.open_ltsa(generated_dir / LTSA)
+    win.session.ltsa.tseg_hr = 1 / 60
+    win.session.view.show_ltsa = True
+    app.processEvents()
+    win.bridge.force()
+    app.processEvents()
+
+    before = win.panels["ltsa"].image.image.copy()
+    win.session.ltsa.contrast = 200.0
+    app.processEvents()
+    assert not np.allclose(before, win.panels["ltsa"].image.image)
+
+
+def test_re_derive_range_puts_the_ltsa_range_back_on_the_data(
+        win, app, generated_dir: Path):
+    win.session.open_ltsa(generated_dir / LTSA)
+    win.session.ltsa.tseg_hr = 1 / 60
+    win.session.view.show_ltsa = True
+    app.processEvents()
+    win.bridge.force()
+    app.processEvents()
+
+    win.session.ltsa.brightness = 30.0
+    app.processEvents()
+    held = win.panels["ltsa"].colorbar.levels()
+
+    win.controls._reset_ltsa_clim()
+    app.processEvents()
+    fresh = win.panels["ltsa"].colorbar.levels()
+    assert fresh != held
+    assert fresh[0] == pytest.approx(held[0] + 30.0, abs=1.0)
+
+
+def test_opening_an_ltsa_resets_its_range(win, app, generated_dir: Path):
+    win.session.open_ltsa(generated_dir / LTSA)
+    win.session.ltsa.tseg_hr = 1 / 60
+    win.session.view.show_ltsa = True
+    app.processEvents()
+    win.bridge.force()
+    app.processEvents()
+    assert win.session.ltsa.clim is not None
+
+    win.session.open_ltsa(generated_dir / LTSA)
+    assert win.session.ltsa.clim is None, "a new file gets a new range"
+
+
+def test_ltsa_range_is_held_while_stepping(win, app, generated_dir: Path):
+    """Same requirement as issue #111 on the audio side: levels stay comparable."""
+    win.session.open_ltsa(generated_dir / LTSA)
+    win.session.ltsa.tseg_hr = 1 / 60
+    win.session.view.show_ltsa = True
+    app.processEvents()
+    win.bridge.force()
+    app.processEvents()
+
+    first = win.panels["ltsa"].colorbar.levels()
+    win.controls._ltsa_step(+1)
+    app.processEvents()
+    assert win.panels["ltsa"].colorbar.levels() == first

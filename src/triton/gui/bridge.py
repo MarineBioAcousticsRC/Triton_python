@@ -96,6 +96,7 @@ _RULES: tuple[tuple[str, Dirty], ...] = (
     # prefix match taken in order.
     ("ltsa.source", Dirty.LTSA | Dirty.LAYOUT),
     ("ltsa.expand", Dirty.NOTHING),             # a mode, draws nothing
+    ("ltsa.clim", Dirty.LTSA),
     ("ltsa.", Dirty.LTSA),
     ("config.", Dirty.NOTHING),
 )

@@ -303,6 +303,15 @@ class LtsaState(_State):
     brightness: float = 0.0
     contrast: float = 100.0
     colormap: str = "jet"
+    #: Colour limits, held once derived -- exactly as ``view.clim`` is for the audio
+    #: spectrogram, and for the same two reasons.
+    #:
+    #: Levels have to stay comparable while an analyst scrolls (issue #111). And
+    #: without holding them, brightness and contrast do **nothing**: re-deriving the
+    #: range from data that has just been shifted by brightness moves the range by the
+    #: same amount, so the picture is identical and only the numbers printed on the
+    #: colour bar change. That was a real bug, reported from use.
+    clim: tuple[float, float] | None = None
     position: np.datetime64 | None = None
     #: Arms click-to-open: with this on, clicking the LTSA opens the audio behind the
     #: point. MATLAB's "Expand" check box, same name, same default (off). It is a mode
@@ -577,6 +586,7 @@ class TritonSession:
             self.ltsa.source = src
             self.ltsa.path = path
             self.ltsa.position = src.start_time
+            self.ltsa.clim = None            # a new file gets a new range
             if self.ltsa.freq1 is None:
                 self.ltsa.freq1 = src.header.fmax
             self.config.last_ltsa_dir = path.parent
@@ -817,8 +827,12 @@ class TritonSession:
         f, db = f[keep], db[keep]
 
         db = db * (st.contrast / 100.0) + st.brightness
+        # Derive once, then hold. See LtsaState.clim: re-deriving here would cancel
+        # brightness and contrast out exactly.
+        if st.clim is None:
+            st.clim = _derive_clim(db)
         return LtsaTile(start=start, f=f, t=src.bin_times_hours(st.tseg_hr),
-                        db=db, clim=_derive_clim(db))
+                        db=db, clim=st.clim)
 
     # -------------------------------------------------------------------- listening
 

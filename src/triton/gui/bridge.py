@@ -81,6 +81,7 @@ _RULES: tuple[tuple[str, Dirty], ...] = (
     ("view.show_delimiters", Dirty.DISPLAY),
     ("view.log_freq", Dirty.AXES),
     # Playback settings change what is heard, never what is drawn.
+    ("view.export_all_channels", Dirty.NOTHING),   # changes files, not the display
     ("view.play_speed", Dirty.NOTHING),
     ("view.play_volume", Dirty.NOTHING),
     ("view.filter_on", Dirty.DATA),

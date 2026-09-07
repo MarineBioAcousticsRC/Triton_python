@@ -14,10 +14,18 @@ enabled the window says so rather than going blank.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
+import numpy as np
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QAction, QGuiApplication, QKeySequence
+from PySide6.QtGui import (
+    QAction,
+    QGuiApplication,
+    QImage,
+    QKeySequence,
+    QPainter,
+)
 from PySide6.QtWidgets import (
     QDockWidget,
     QFileDialog,
@@ -151,6 +159,7 @@ class MainWindow(QMainWindow):
         self.player = Player()
 
         self.setStatusBar(QStatusBar())
+        self._image_acts: dict[str, QAction] = {}
         self._build_menus()
 
         for panel in self.panels.values():
@@ -158,7 +167,9 @@ class MainWindow(QMainWindow):
             panel.picked.connect(self._on_pick)
 
         self.bridge.repaint_needed.connect(self._repaint)
+        self.bridge.changed.connect(self._sync_export_menus)
         self._frame = None
+        self._sync_export_menus()
         self._apply_layout()
         if self.session.audio.is_open:
             self.bridge.force()
@@ -175,6 +186,57 @@ class MainWindow(QMainWindow):
             act.setShortcut(shortcut)
             act.triggered.connect(fn)
             file_menu.addAction(act)
+        file_menu.addSeparator()
+
+        # Grouped as initpulldowns.m:18-48 groups them, so the muscle memory carries,
+        # and greyed out until there is something to export, as there.
+        self.export_menu = file_menu.addMenu("Export plotted &data")
+        for label, fn in (
+            ("&WAV\u2026 (counts, for measurement)",
+             lambda: self._export_audio("wav")),
+            ("&Normalized WAV\u2026 (for listening)",
+             lambda: self._export_audio("normwav")),
+            ("&x.wav\u2026 (keeps time and deployment)",
+             lambda: self._export_audio("xwav")),
+            ("NumPy .np&z\u2026", lambda: self._export_audio("npz")),
+            ("MATLAB .&mat\u2026", lambda: self._export_audio("mat")),
+        ):
+            act = QAction(label, self)
+            act.triggered.connect(fn)
+            self.export_menu.addAction(act)
+
+        self.savefig_menu = file_menu.addMenu("Save plot window &as")
+        for label, fn in (
+            ("&PNG\u2026", lambda: self._save_window("png")),
+            ("&JPEG\u2026", lambda: self._save_window("jpg")),
+            ("P&DF\u2026", lambda: self._save_window("pdf")),
+        ):
+            act = QAction(label, self)
+            act.triggered.connect(fn)
+            self.savefig_menu.addAction(act)
+
+        self.saveimage_menu = file_menu.addMenu("Save as &image (raw pixels)")
+        self.saveimage_menu.setToolTipsVisible(True)
+        for label, kind, tip in (
+            ("&Spectrogram\u2026", "specgram",
+             "One pixel per time bin per frequency bin. No axes, no labels."),
+            ("&LTSA\u2026", "ltsa",
+             "The LTSA window at its native bin resolution."),
+        ):
+            act = QAction(label, self)
+            act.setToolTip(tip)
+            act.triggered.connect(lambda _=False, k=kind: self._save_image(k))
+            self.saveimage_menu.addAction(act)
+            self._image_acts[kind] = act
+
+        meta_menu = file_menu.addMenu("Export session m&etadata")
+        for label, fn in (("&JSON\u2026", lambda: self._export_metadata("json")),
+                          ("MATLAB .m&at\u2026",
+                           lambda: self._export_metadata("mat"))):
+            act = QAction(label, self)
+            act.triggered.connect(fn)
+            meta_menu.addAction(act)
+
         file_menu.addSeparator()
         quit_act = QAction("Quit", self)
         quit_act.setShortcut(QKeySequence.StandardKey.Quit)
@@ -385,6 +447,202 @@ class MainWindow(QMainWindow):
                 self.statusBar().showMessage(str(exc), 8000)
 
         self.controls._refresh_readouts()
+
+    # ---------------------------------------------------------------------- export
+
+    def _sync_export_menus(self, path: str = "") -> None:
+        """Grey the export menus out until there is something to export.
+
+        What ``initpulldowns.m`` does with ``Enable, off`` -- except that MATLAB
+        then has to switch them back on by hand from every site that opens or closes a
+        file (``control.m``'s ``menuon``/``menuoff``), and misses some. Here it follows
+        the change notification, so it cannot drift.
+        """
+        if path and not path.startswith(("audio.", "ltsa.")):
+            return
+        audio = self.session.audio.is_open
+        for menu in (self.export_menu, self.savefig_menu):
+            menu.setEnabled(audio)
+        self._image_acts["specgram"].setEnabled(audio)
+        self._image_acts["ltsa"].setEnabled(self.session.ltsa.is_open)
+        self.saveimage_menu.setEnabled(audio or self.session.ltsa.is_open)
+
+    def _ask_where(self, title: str, suffix: str, filt: str) -> Path | None:
+        """A save dialog, offering a timestamped name in the last-used directory.
+
+        The default name carries the source file and the window's start time, because
+        a folder of clips called ``export1.wav`` is unusable a month later and that is
+        what MATLAB's ``uiputfile`` default produces.
+        """
+        from ..export import default_stem
+
+        start = (self.session.config.export_dir
+                 or self.session.config.last_audio_dir or Path.cwd())
+        stem = default_stem(
+            self.session.audio.path,
+            self._frame.start if self._frame is not None
+            else np.datetime64("now"),
+        )
+        name, _ = QFileDialog.getSaveFileName(
+            self, title, str(Path(start) / f"{stem}{suffix}"), filt)
+        if not name:
+            return None
+        out = Path(name)
+        if not out.name.lower().endswith(suffix.lower()):
+            out = out.with_name(out.name + suffix)
+        self.session.config.export_dir = out.parent
+        return out
+
+    def _export_audio(self, kind: str) -> None:
+        from .. import export
+
+        if self._frame is None:
+            self.statusBar().showMessage("nothing plotted to export", 5000)
+            return
+        title, suffix, filt = {
+            "wav": ("Export window as WAV", ".wav", "WAV (*.wav)"),
+            "normwav": ("Export window as normalized WAV", ".wav", "WAV (*.wav)"),
+            "xwav": ("Export window as x.wav", ".x.wav", "x.wav (*.x.wav)"),
+            "npz": ("Export window arrays", ".npz", "NumPy archive (*.npz)"),
+            "mat": ("Export window arrays", ".mat", "MATLAB file (*.mat)"),
+        }[kind]
+        out = self._ask_where(title, suffix, filt)
+        if out is None:
+            return
+
+        frame = self._frame
+        channel = None if self.session.view.export_all_channels else frame.channel
+        meta = export.provenance(self.session, frame)
+        try:
+            if kind == "wav":
+                export.write_wav(out, frame, channel=channel, sidecar=meta)
+            elif kind == "normwav":
+                export.write_wav(out, frame, normalise=True, channel=channel,
+                                 sidecar=meta)
+            elif kind == "xwav":
+                export.write_xwav(out, frame, self.session, channel=channel,
+                                  sidecar=meta)
+            elif kind == "npz":
+                export.write_arrays(out, frame, self.session, channel=channel)
+            else:
+                export.write_mat(out, frame, self.session, channel=channel)
+        except Exception as exc:                      # noqa: BLE001
+            self.report_error("Could not export", str(exc))
+            return
+        n = 1 if channel else int(frame.samples.shape[1])
+        plural = "" if n == 1 else "s"
+        plural = "" if n == 1 else "s"
+        self.statusBar().showMessage(
+            f"wrote {out.name}  --  {n} channel{plural}, "
+            f"{frame.samples.shape[0]:,} samples", 8000)
+
+    def _save_window(self, fmt: str) -> None:
+        """The plots as a picture of themselves, at better than screen resolution.
+
+        MATLAB prints at 300 dpi (``filepd.m``). A Qt widget grab has no dpi to set, so
+        PNG and JPEG come out at the window's device pixel ratio and PDF goes through
+        ``QPdfWriter`` at 300 dpi -- which still carries the spectrogram as a raster,
+        because a spectrogram *is* a raster. Truly vector axes would mean re-plotting
+        through matplotlib; see EXPORT_PLAN §4 for why that is not worth it yet.
+        """
+        suffix = f".{fmt}"
+        filt = {"png": "PNG image (*.png)", "jpg": "JPEG image (*.jpg)",
+                "pdf": "PDF document (*.pdf)"}[fmt]
+        out = self._ask_where("Save plot window", suffix, filt)
+        if out is None:
+            return
+        target = self.splitter if self.splitter.isVisible() else self.centralWidget()
+        try:
+            pm = target.grab()
+            if fmt == "pdf":
+                from PySide6.QtGui import QPageSize, QPdfWriter
+
+                writer = QPdfWriter(str(out))
+                writer.setResolution(300)
+                writer.setPageSize(QPageSize(QPageSize.PageSizeId.A4))
+                painter = QPainter(writer)
+                try:
+                    page = painter.viewport().size()
+                    size = pm.size().scaled(page, Qt.AspectRatioMode.KeepAspectRatio)
+                    painter.drawPixmap(0, 0, size.width(), size.height(), pm)
+                finally:
+                    painter.end()
+            elif not pm.save(str(out)):
+                raise RuntimeError(f"Qt would not write {out.suffix} here")
+        except Exception as exc:                      # noqa: BLE001
+            self.report_error("Could not save the plot window", str(exc))
+            return
+        self.statusBar().showMessage(f"wrote {out.name}", 8000)
+
+    def _save_image(self, kind: str) -> None:
+        """The data as raw pixels -- one per bin, no axes, no labels.
+
+        Revives the menu item MATLAB creates invisible and disabled
+        (``initpulldowns.m:46``, ``filepd.m:403``). Not a screenshot: at native
+        resolution these pixels *are* the numbers, which is what figure assembly and
+        downstream image tools want, and it is the one export whose size does not
+        depend on how big the window happened to be.
+        """
+        from .. import export
+
+        if kind == "ltsa":
+            if not self.session.ltsa.is_open:
+                self.statusBar().showMessage("no LTSA open", 5000)
+                return
+            tile, cmap = self.session.ltsa_tile(), self.session.ltsa.colormap
+        else:
+            if self._frame is None:
+                self.statusBar().showMessage("nothing plotted to export", 5000)
+                return
+            tile, cmap = self._frame.spectrogram, self.session.view.colormap
+
+        out = self._ask_where(f"Save {kind} image", ".png",
+                              "PNG image (*.png);;JPEG image (*.jpg)")
+        if out is None:
+            return
+        try:
+            rgb = np.ascontiguousarray(export.spectrogram_rgb(tile, cmap))
+            h, w, _ = rgb.shape
+            # bytes(), not the array: QImage does not copy or take ownership, and a
+            # view onto a temporary would be freed out from under it.
+            img = QImage(bytes(rgb.data), w, h, 3 * w,
+                         QImage.Format.Format_RGB888)
+            if not img.save(str(out)):
+                raise RuntimeError(f"Qt would not write {out.suffix} here")
+        except Exception as exc:                      # noqa: BLE001
+            self.report_error("Could not save the image", str(exc))
+            return
+        export.write_sidecar(out, export.provenance(self.session, self._frame))
+        self.statusBar().showMessage(f"wrote {out.name}  --  {w} x {h} pixels", 8000)
+
+    def _export_metadata(self, fmt: str) -> None:
+        """Every setting behind what is on screen, without the data.
+
+        No MATLAB equivalent. It is here because the provenance sidecar answers "what
+        made this file" and this answers "what was I looking at" -- which is the
+        question a half-finished analysis leaves behind.
+        """
+        from .. import export
+
+        out = self._ask_where("Export session metadata", f".{fmt}",
+                              {"json": "JSON (*.json)",
+                               "mat": "MATLAB file (*.mat)"}[fmt])
+        if out is None:
+            return
+        meta = export.provenance(self.session, self._frame)
+        try:
+            if fmt == "json":
+                out.write_text(json.dumps(meta, indent=2, sort_keys=True,
+                                          default=str),
+                               encoding="utf-8")
+            else:
+                from scipy.io import savemat
+
+                savemat(str(out), {"provenance": json.dumps(meta, default=str)})
+        except Exception as exc:                      # noqa: BLE001
+            self.report_error("Could not export metadata", str(exc))
+            return
+        self.statusBar().showMessage(f"wrote {out.name}", 8000)
 
     # ---------------------------------------------------------------------- cursor
 

@@ -263,6 +263,11 @@ class ViewState(_State):
     show_timeseries: bool = False
     show_spectra: bool = False
 
+    #: Export every channel, or only the one on display. Default all, because a
+    #: multichannel clip is what a multichannel recording is; the box exists because
+    #: sometimes one channel is all anyone wants to send.
+    export_all_channels: bool = True
+
     # Playback. Speed multiplies the effective sample rate, as PARAMS.speedFactor
     # does, so values below 1 slow the audio down and pitch it into hearing range --
     # which is the normal case for anything recorded above about 50 kHz.

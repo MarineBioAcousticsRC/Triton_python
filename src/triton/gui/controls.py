@@ -411,6 +411,15 @@ class ControlPanel(QWidget):
                         r, 3)
             r += 1
 
+            g.addWidget(_row_label("Export"), r, 0)
+            allch = self._check("view.export_all_channels", "All channels")
+            allch.setToolTip(
+                "On: exported WAV and x.wav files hold every channel, interleaved.\n"
+                "Off: only the channel on display."
+            )
+            g.addWidget(allch, r, 1, 1, 3)
+            r += 1
+
             g.addWidget(_header("Speed (x)"), r, 2)
             g.addWidget(_header("Volume"), r, 3)
             r += 1

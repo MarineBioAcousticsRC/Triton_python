@@ -117,6 +117,18 @@ def provenance(session: TritonSession, frame: Frame | None = None) -> dict[str, 
     return out
 
 
+def _check_writable(path: Path) -> None:
+    """Fail before opening anything, with a sentence a person can act on.
+
+    Worth the four lines: a user can type a path whose folder does not exist, and
+    ``wave.open`` on one raises from inside its constructor, leaving a half-built object
+    whose destructor then raises a second, unrelated ``AttributeError`` -- so the error
+    that reaches the status bar is about ``_file``, not about the folder.
+    """
+    if not path.parent.is_dir():
+        raise FileNotFoundError(f"there is no folder {path.parent}")
+
+
 def write_sidecar(path: str | Path, meta: dict[str, Any]) -> Path:
     """Write ``<path>.json`` next to an export."""
     side = Path(path).with_suffix(Path(path).suffix + ".json")
@@ -209,6 +221,7 @@ def write_wav(
     Uses the standard library's ``wave``, so no dependency is added.
     """
     path = Path(path)
+    _check_writable(path)
     x = _select(frame, channel)
     bits = bits or 16
     if normalise:

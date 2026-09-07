@@ -14,6 +14,7 @@ be asserted on, but widget properties can, and those are what carry the meaning.
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 
@@ -938,3 +939,173 @@ def test_ltsa_range_is_held_while_stepping(win, app, generated_dir: Path):
     win.controls._ltsa_step(+1)
     app.processEvents()
     assert win.panels["ltsa"].colorbar.levels() == first
+
+
+# ------------------------------------------------------------------------- export
+#
+# The file dialog is the one thing here that cannot be driven headless, so every test
+# below replaces ``_ask_where`` with a fixed path. That is the whole seam: the menu
+# actions do the choosing, ``_ask_where`` does the asking, and the writers live in
+# ``triton.export`` where they are tested against real files without Qt at all.
+
+
+def _no_dialog(win, path):
+    """Answer the save dialog with *path*, and remember what it was asked for."""
+    asked = []
+
+    def fake(title, suffix, filt):
+        asked.append((title, suffix, filt))
+        return Path(path)
+
+    win._ask_where = fake
+    return asked
+
+
+def test_export_menus_are_dead_until_something_is_open(app, generated_dir: Path):
+    w = MainWindow()
+    w.modal_errors = False
+    try:
+        assert not w.export_menu.isEnabled(), "nothing open, nothing to export"
+        assert not w._image_acts["ltsa"].isEnabled()
+
+        w.open_audio(generated_dir / XWAV)
+        app.processEvents()
+        assert w.export_menu.isEnabled()
+        assert w.savefig_menu.isEnabled()
+        assert w._image_acts["specgram"].isEnabled()
+        # Still no LTSA, and the audio being open must not imply one.
+        assert not w._image_acts["ltsa"].isEnabled()
+
+        w.session.open_ltsa(generated_dir / LTSA)
+        app.processEvents()
+        assert w._image_acts["ltsa"].isEnabled()
+    finally:
+        w.close()
+
+
+@pytest.mark.parametrize("kind,name", [
+    ("wav", "clip.wav"),
+    ("normwav", "clip.wav"),
+    ("xwav", "clip.x.wav"),
+    ("npz", "clip.npz"),
+    ("mat", "clip.mat"),
+])
+def test_every_audio_export_writes_a_file(win, app, tmp_path, kind, name):
+    out = tmp_path / name
+    _no_dialog(win, out)
+    win._export_audio(kind)
+    assert out.exists() and out.stat().st_size > 0
+
+
+def test_the_all_channels_box_decides_how_many_channels_are_written(win, app,
+                                                                    tmp_path):
+    """Kait's request: all channels by default, one if the box is cleared."""
+    import wave
+
+    def channels(path):
+        with wave.open(str(path), "rb") as f:
+            return f.getnchannels()
+
+    n = win._frame.samples.shape[1]
+
+    both = tmp_path / "all.wav"
+    _no_dialog(win, both)
+    win.session.view.export_all_channels = True
+    win._export_audio("wav")
+    assert channels(both) == n
+
+    one = tmp_path / "one.wav"
+    _no_dialog(win, one)
+    win.session.view.export_all_channels = False
+    win._export_audio("wav")
+    assert channels(one) == 1
+
+
+def test_an_export_leaves_a_provenance_sidecar(win, app, tmp_path):
+    out = tmp_path / "clip.wav"
+    _no_dialog(win, out)
+    win._export_audio("wav")
+    side = out.with_suffix(out.suffix + ".json")
+    assert side.exists()
+    meta = json.loads(side.read_text(encoding="utf-8"))
+    # The three questions a clip has to answer a year later: what, when, how fast.
+    assert meta["source"] and meta["window_start"] and meta["sample_rate"]
+
+
+def test_a_refused_path_reports_and_does_not_raise(win, app, tmp_path):
+    missing = tmp_path / "no-such-dir"
+    _no_dialog(win, missing / "clip.wav")
+    win._export_audio("wav")            # must not raise
+    # And it must name the folder, rather than surfacing whatever the standard
+    # library happened to raise on the way down.
+    assert str(missing) in win.statusBar().currentMessage()
+
+
+def test_cancelling_the_dialog_writes_nothing(win, app, tmp_path):
+    win._ask_where = lambda *a: None
+    win._export_audio("wav")
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize("fmt", ["png", "jpg", "pdf"])
+def test_saving_the_plot_window_writes_a_picture(win, app, tmp_path, fmt):
+    out = tmp_path / f"window.{fmt}"
+    _no_dialog(win, out)
+    win._save_window(fmt)
+    assert out.exists() and out.stat().st_size > 0
+
+
+def test_the_spectrogram_image_is_one_pixel_per_bin(win, app, tmp_path):
+    """Not a screenshot: its size follows the data, not the size of the window."""
+    from PySide6.QtGui import QImage
+
+    out = tmp_path / "spec.png"
+    _no_dialog(win, out)
+    win._save_image("specgram")
+    img = QImage(str(out))
+    db = win._frame.spectrogram.db
+    assert (img.width(), img.height()) == (db.shape[1], db.shape[0])
+    assert out.with_suffix(".png.json").exists(), "an image needs provenance too"
+
+
+def test_the_ltsa_image_follows_the_ltsa_tile(win, app, tmp_path,
+                                              generated_dir: Path):
+    from PySide6.QtGui import QImage
+
+    win.session.open_ltsa(generated_dir / LTSA)
+    win.session.ltsa.tseg_hr = 1 / 60
+    app.processEvents()
+    out = tmp_path / "ltsa.png"
+    _no_dialog(win, out)
+    win._save_image("ltsa")
+    img = QImage(str(out))
+    db = win.session.ltsa_tile().db
+    assert (img.width(), img.height()) == (db.shape[1], db.shape[0])
+
+
+def test_asking_for_an_ltsa_image_with_no_ltsa_says_so(win, app, tmp_path):
+    asked = _no_dialog(win, tmp_path / "nope.png")
+    win._save_image("ltsa")
+    assert asked == [], "it should not even open a dialog"
+    assert "ltsa" in win.statusBar().currentMessage().lower()
+
+
+@pytest.mark.parametrize("fmt", ["json", "mat"])
+def test_session_metadata_exports(win, app, tmp_path, fmt):
+    out = tmp_path / f"session.{fmt}"
+    _no_dialog(win, out)
+    win._export_metadata(fmt)
+    assert out.exists()
+    if fmt == "json":
+        assert json.loads(out.read_text(encoding="utf-8"))["source"]
+
+
+def test_the_default_name_carries_the_file_and_the_time(win, app):
+    """Whatever the dialog offers, it must not be ``export1.wav``."""
+    from triton.export import default_stem
+
+    stem = default_stem(win.session.audio.path, win._frame.start)
+    # ``.stem`` would leave the ".x" of ".x.wav" behind; default_stem drops both.
+    assert win.session.audio.path.name.split(".")[0] in stem
+    assert str(win._frame.start)[:10].replace("-", "") in stem.replace("-", "")
+    assert ":" not in stem, "colons are not allowed in a Windows filename"

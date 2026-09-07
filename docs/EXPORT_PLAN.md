@@ -146,16 +146,36 @@ the *figure*, which is more useful and less brittle.
 
 ## 5. Order of work
 
-1. `triton/export.py` with `write_wav`, `provenance`, and the filename helper — the
-   smallest useful slice, testable with no GUI.
-2. `write_xwav`, with a round-trip test: export a clip, read it back with
+1. ~~`triton/export.py` with `write_wav`, `provenance`, and the filename helper — the
+   smallest useful slice, testable with no GUI.~~ **Done.**
+2. ~~`write_xwav`, with a round-trip test: export a clip, read it back with
    `read_xwav_header`, and assert the start time, gain and identity fields survived.
-   That test is the real proof this is worth having.
-3. `spectrogram_rgb` plus `write_arrays` / `write_mat`.
-4. The File menu and the Qt image/PDF writers.
+   That test is the real proof this is worth having.~~ **Done** —
+   `test_xwav_round_trip_keeps_time_and_deployment`, four-channel case included.
+3. ~~`spectrogram_rgb` plus `write_arrays` / `write_mat`.~~ **Done.**
+4. ~~The File menu and the Qt image/PDF writers.~~ **Done.**
 5. A `triton-export` CLI over the same functions, so a whole deployment can be clipped
-   in batch. Not part of this piece, but the split above means it costs almost nothing
-   later.
+   in batch. **Not built** — deferred by agreement, and the split above means it stays
+   cheap to add.
+
+### What shipped, as menu items
+
+| File menu | Writes |
+| --- | --- |
+| Export plotted data → WAV | counts unchanged, for measurement |
+| Export plotted data → Normalized WAV | peak-scaled, for listening |
+| Export plotted data → x.wav | keeps start time and the whole deployment header |
+| Export plotted data → NumPy .npz / MATLAB .mat | samples, spectrogram, axes |
+| Save plot window as → PNG / JPEG / PDF | a picture of the plots as drawn |
+| Save as image → Spectrogram / LTSA | raw pixels, one per bin, no axes |
+| Export session metadata → JSON / .mat | every setting behind what is on screen |
+
+Two things beyond the plan, both cheap once the pieces existed: the raw-pixel export
+also covers the **LTSA** panel, not just the spectrogram, and the menus grey themselves
+out from the change notification rather than from every site that opens a file.
+
+The **All channels** checkbox lives in the control panel next to the sound controls:
+on by default, and clearing it exports only the channel on display.
 
 ## 6. Questions worth settling first
 
